@@ -2,17 +2,1798 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+/* ==========================================================================
+   HINNOITTELU – MUOKKAA TÄTÄ (PRICING_CONFIG)
+   --------------------------------------------------------------------------
+   Kaikki sovelluksen hinnat ja valintojen tekstit tulevat tästä yhdestä
+   kohdasta. Muuta lukuja tai tekstejä, tallenna tiedosto ja lataa sivu
+   uudelleen. Asiakkaalle näkyvät tekstit ovat englanniksi, ohjeet suomeksi.
+
+   HUOM: Luvut ovat PAIKKAMERKKEJÄ (placeholder), eivät minkään valmistajan
+   vahvistettuja hintoja. Päivitä ne ennen julkaisua.
+
+   Näin hinta lasketaan:
+     1. Perushinta pituuden mukaan (lengths → basePrice)
+     2. kerrotaan käyttötarkoituksen kertoimella (usage → multiplier)
+     3. perushinnan ympärille tehdään haarukka (basePriceSpread, esim. ±5 %)
+     4. päälle lisätään hytit, voimanlähde, energiajärjestelmä, väri ja
+        henkilökohtaiset varusteet – jokaisella oma ala- ja yläraja (min / max)
+     5. lopputulos pyöristetään (roundTo, esim. lähimpään 5 000 euroon)
+
+   Kaikki summat ovat euroja ilman välilyöntejä: 450000 = 450 000 €.
+   ========================================================================== */
+const PRICING_CONFIG = {
+
+  // Haarukan leveys perushinnan ympärillä. 0.05 = ±5 %.
+  basePriceSpread: 0.05,
+
+  // Lopullisen hintahaarukan pyöristys euroina.
+  roundTo: 5000,
+
+  // Budjettiliukusäädin: pienin ja suurin arvo, askel ja oletusarvo.
+  budget: { min: 300000, max: 2000000, step: 25000, initial: 750000 },
+
+  // PITUUS: perushinta (vakiovarusteltu vene) ja pituus metreinä.
+  lengths: {
+    40: { basePrice: 450000,  meters: 12.2 },
+    45: { basePrice: 620000,  meters: 13.7 },
+    50: { basePrice: 850000,  meters: 15.2 },
+    55: { basePrice: 1150000, meters: 16.8 },
+    60: { basePrice: 1500000, meters: 18.3 }
+  },
+
+  // KÄYTTÖTARKOITUS: multiplier kertoo perushinnan. 1.00 = ei lisää,
+  // 1.12 = 12 % kalliimpi varustelutaso.
+  usage: {
+    day: {
+      label: 'Day sailing and weekends',
+      text: 'Light equipment for short trips in home waters.',
+      multiplier: 1.00
+    },
+    ocean: {
+      label: 'Blue-water ocean cruising',
+      text: 'Heavier-duty systems, safety gear and self-sufficiency for long passages.',
+      multiplier: 1.12
+    },
+    charter: {
+      label: 'Charter',
+      text: 'Hard-wearing finishes and equipment that suits a changing crew.',
+      multiplier: 1.06
+    },
+    liveaboard: {
+      label: 'Liveaboard',
+      text: 'Comfort, storage and energy for life on board all year round.',
+      multiplier: 1.08
+    }
+  },
+
+  // HYTIT: lisähinta (min–max) ja lyhin runko, johon hyttimäärä mahtuu.
+  cabins: {
+    2: { label: '2',  min: 0,     max: 0,     minLength: 40 },
+    3: { label: '3',  min: 15000, max: 25000, minLength: 40 },
+    4: { label: '4',  min: 30000, max: 45000, minLength: 40 },
+    5: { label: '5+', min: 50000, max: 75000, minLength: 50 }
+  },
+
+  // VOIMANLÄHDE (propulsion): lisähinta (min–max) verrattuna perusveneeseen,
+  // jossa on dieselmoottorit ja purjeet.
+  //   sails: true    = veneessä on masto ja purjeet
+  //   electric: true = sähkömoottorit (false = dieselmoottorit)
+  //   short          = lyhyt nimi kuvan päällä näkyvään merkkiin
+  propulsion: {
+    sailDiesel: {
+      label: 'Diesel engines + sails', short: 'Diesel + sails',
+      text: 'Twin diesel engines and a full set of sails. The proven long-distance setup.',
+      sails: true, electric: false, min: 0, max: 0
+    },
+    sailElectric: {
+      label: 'Electric motors + sails', short: 'Electric + sails',
+      text: 'Twin electric motors and a full set of sails. Silent in and out of harbour.',
+      sails: true, electric: true, min: 60000, max: 110000
+    },
+    diesel: {
+      label: 'Diesel engines only', short: 'Diesel engines',
+      text: 'A power catamaran with twin diesel engines. No rig to handle, long range under power.',
+      sails: false, electric: false, min: 20000, max: 60000
+    },
+    electric: {
+      label: 'Electric motors only', short: 'Electric motors',
+      text: 'A power catamaran with twin electric motors and a large battery bank. Quiet and clean, shorter range.',
+      sails: false, electric: true, min: 120000, max: 200000
+    }
+  },
+
+  // ENERGIA: lisähinta (min–max) ja paneeliteho watteina.
+  energy: {
+    none: {
+      label: 'Standard system',
+      text: 'No extra solar. Batteries charge underway and from shore power.',
+      watts: 0, min: 0, max: 0
+    },
+    basic: {
+      label: 'Basic pack 1000 W',
+      text: 'Solar panels cover lights, fridge and electronics at anchor.',
+      watts: 1000, min: 8000, max: 14000
+    },
+    offgrid: {
+      label: 'Off-grid power pack 3000 W',
+      text: 'A large solar array and lithium batteries. Weeks away from the dock.',
+      watts: 3000, min: 35000, max: 55000
+    }
+  },
+
+  // RUNGON VÄRI: hex on värikoodi, min–max lisähinta.
+  colors: {
+    white:     { label: 'Classic white',  hex: '#f6f8f9', min: 0,     max: 0 },
+    blue:      { label: 'Ocean blue',     hex: '#17406b', min: 12000, max: 20000 },
+    graphite:  { label: 'Graphite grey',  hex: '#4b5661', min: 12000, max: 20000 },
+    champagne: { label: 'Champagne',      hex: '#d9c49b', min: 18000, max: 28000 }
+  },
+
+  // HENKILÖMÄÄRÄ: turva- ja mukavuusvarusteet per henkilö (pelastusliivit,
+  // lautta, vuodevarusteet). Aseta molemmat nollaksi, jos et halua tätä riviä.
+  perPerson: { min: 800, max: 1500 },
+  persons: { min: 2, max: 12, initial: 4 },
+
+  // Loppunäkymän painike ja pieni präntti.
+  cta: {
+    url: 'https://globalcatamarans.com',
+    text: "Let's find the right boat for you – globalcatamarans.com"
+  },
+  disclaimer: 'The estimate is indicative and not an offer. The final price depends on the builder, model, equipment, taxes and delivery.'
+};
+/* ===================== HINNOITTELU PÄÄTTYY TÄHÄN ========================= */
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Build your dream catamaran | Global Catamarans</title>
-<meta name="description" content="Build your dream catamaran step by step, watch her take shape on screen, get an indicative price and turn her into a short story you can share.">
+<meta name="description" content="Build your dream catamaran step by step, watch her take shape on screen, get an indicative price and turn her into a short story with an invitation you can send.">
 <meta property="og:title" content="Build your dream catamaran">
 <meta property="og:description" content="Build your dream catamaran step by step and turn her into a short story you can share.">
 <meta property="og:type" content="website">
-<!-- Etusivu ohjaa sovellukseen (index1.html). Jaetun tarinan tiedot (?s=...) kulkevat mukana. -->
-<script>location.replace('index1.html' + location.search + location.hash);</script>
-<noscript><meta http-equiv="refresh" content="0; url=index1.html"></noscript>
+<meta name="theme-color" content="#06182b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b2a47'/%3E%3Cpath d='M17 4v18H7z' fill='%23fff'/%3E%3Cpath d='M19 9v13h7z' fill='%23dcc08c'/%3E%3Cpath d='M4 25h24' stroke='%232aa6a1' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  --abyss:#06182b; --navy:#0b2a47; --navy-2:#143c61;
+  --sea:#2aa6a1; --sea-deep:#167a77; --sea-soft:#d5efec;
+  --brass:#a9834b; --brass-hi:#dcc08c;
+  --sail:#f2f5f6; --white:#fff; --ink:#0c2238; --muted:#566777; --line:#d3dbe0;
+  --ok:#5fd0a0; --warn:#f0c661; --over:#f08a7c;
+  --font:"Avenir Next",Avenir,"Segoe UI","Helvetica Neue",Roboto,Arial,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:var(--font);color:var(--ink);background:var(--sail);line-height:1.5;-webkit-font-smoothing:antialiased}
+body.locked{overflow:hidden}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+.sr{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+[hidden]{display:none!important}
+
+/* ---------- Rakenne ---------- */
+.app{display:grid;grid-template-columns:minmax(0,1.22fr) minmax(400px,.78fr);min-height:100vh}
+.stage{position:sticky;top:0;height:100vh;height:100dvh;overflow:hidden;background:var(--abyss)}
+.stage svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.panel{padding:clamp(28px,4.2vw,60px) clamp(22px,3.6vw,52px) 48px;min-width:0}
+
+/* ---------- Näyttämön päällä ---------- */
+.brand{position:absolute;top:22px;left:26px;color:#fff;font-size:.82rem;letter-spacing:.24em;font-weight:500;opacity:.92}
+.chips{position:absolute;top:18px;right:22px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin:0;padding:0;list-style:none;max-width:56%}
+.chips li{font-size:.78rem;color:#fff;padding:4px 10px;border:1px solid rgba(255,255,255,.32);border-radius:99px;background:rgba(6,24,43,.35);white-space:nowrap}
+
+.hud{position:absolute;left:24px;right:24px;bottom:24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 36px;align-items:end;padding:18px 24px 20px;color:#fff;background:rgba(6,24,43,.74);border:1px solid rgba(220,192,140,.4);border-radius:4px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.hud-label{font-size:.8rem;color:var(--brass-hi);margin:0 0 2px}
+.hud-price{font-size:clamp(1.35rem,2.3vw,2.1rem);font-weight:300;letter-spacing:-.01em;line-height:1.15;margin:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+.hud-fine{grid-column:1/-1;margin:0;font-size:.72rem;color:rgba(255,255,255,.6)}
+
+.meter-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:.82rem;margin-bottom:26px}
+.meter-status{font-weight:600;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.meter-status::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
+.meter-note{color:rgba(255,255,255,.72);text-align:right}
+.meter-track{position:relative;height:8px;border-radius:99px;background:rgba(255,255,255,.16)}
+.meter-band{position:absolute;top:0;bottom:0;border-radius:99px;background:currentColor;transition:left .35s ease,width .35s ease}
+.meter-mark{position:absolute;top:-6px;bottom:-6px;width:2px;background:#fff;transition:left .35s ease}
+.meter-mark span{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:3px;font-size:.7rem;white-space:nowrap;color:#fff}
+.meter-mark.is-right span{left:auto;right:-2px;transform:none}
+.meter-mark.is-left span{left:-2px;transform:none}
+.meter[data-status="ok"]{color:var(--ok)}
+.meter[data-status="warn"]{color:var(--warn)}
+.meter[data-status="over"]{color:var(--over)}
+
+/* ---------- Otsikko ja vaiheet ---------- */
+.intro h1{font-weight:300;font-size:clamp(2rem,3.3vw,3rem);line-height:1.08;letter-spacing:-.022em;margin:0 0 12px}
+.intro p{margin:0;color:var(--muted);max-width:44ch}
+
+.steps-wrap{position:relative;margin-top:34px;padding-bottom:28px}
+.steps-wrap::before{content:"";position:absolute;left:14px;right:14px;top:14px;height:1px;background:var(--line)}
+.steps{display:flex;list-style:none;margin:0;padding:0;position:relative}
+.steps-fill{position:absolute;left:14px;top:14px;height:1px;background:var(--brass);transition:width .4s ease}
+.steps li{flex:1;display:flex}
+.steps li:last-child{flex:0 0 auto}
+.steps button{position:relative;background:none;border:0;padding:0;display:block;font-size:.78rem;color:var(--muted);text-align:left}
+.steps button span:not(.n){position:absolute;top:36px;left:50%;transform:translateX(-50%);white-space:nowrap;display:none}
+.steps button[aria-current] span:not(.n){display:block}
+.steps li:first-child button span:not(.n){left:0;transform:none}
+.steps li:last-child button span:not(.n){left:auto;right:0;transform:none}
+.steps .n{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:var(--sail);border:1px solid var(--line);font-size:.82rem;font-variant-numeric:tabular-nums;transition:background .2s,color .2s,border-color .2s}
+.steps button.done .n{border-color:var(--brass);color:var(--brass)}
+.steps button[aria-current="step"]{color:var(--ink);font-weight:600}
+.steps button[aria-current="step"] .n{background:var(--navy);border-color:var(--navy);color:#fff}
+
+.step{margin-top:38px}
+.step h2{font-weight:400;font-size:1.5rem;letter-spacing:-.012em;margin:0 0 6px;line-height:1.2}
+.step h2:focus{outline:none}
+.lead{margin:0 0 22px;color:var(--muted);max-width:52ch}
+.step h3{font-size:.95rem;font-weight:600;margin:30px 0 10px}
+
+/* ---------- Valintarivit ---------- */
+.opts{border-bottom:1px solid var(--line)}
+.opt{display:block;cursor:pointer}
+.opt-body{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:4px 16px;align-items:start;padding:16px 16px 16px 14px;border-top:1px solid var(--line);border-left:3px solid transparent;transition:background .18s,color .18s}
+.opt-body svg{width:26px;height:26px;margin-top:2px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+.opt-title{font-weight:600;display:block}
+.opt-text{display:block;font-size:.9rem;color:var(--muted)}
+.opt-price{font-size:.84rem;white-space:nowrap;color:var(--muted);padding-top:2px;font-variant-numeric:tabular-nums;text-align:right}
+.opt:hover .opt-body{background:#e8eef0}
+.opt input:checked+.opt-body{background:var(--navy);color:#fff;border-left-color:var(--brass-hi)}
+.opt input:checked+.opt-body .opt-text,.opt input:checked+.opt-body .opt-price{color:rgba(255,255,255,.76)}
+.opt input:focus-visible+.opt-body,.cell input:focus-visible+.cell-body,.swatch input:focus-visible+.swatch-body{outline:2px solid var(--sea);outline-offset:2px}
+.tag{display:inline-block;margin-left:8px;padding:1px 8px;font-size:.7rem;font-weight:600;font-style:normal;border-radius:99px;background:var(--sea-soft);color:#0d5754;vertical-align:2px;white-space:nowrap}
+
+/* ---------- Henkilöt ja budjetti ---------- */
+.crew{display:flex;align-items:center;gap:18px}
+.crew button{width:46px;height:46px;border-radius:50%;border:1px solid var(--navy);background:none;font-size:1.4rem;line-height:1;display:grid;place-items:center}
+.crew button:hover:not(:disabled){background:var(--navy);color:#fff}
+.crew button:disabled{opacity:.3;cursor:default}
+.crew output{font-size:3rem;font-weight:300;min-width:1.6ch;text-align:center;line-height:1;font-variant-numeric:tabular-nums}
+.crew-dots{display:flex;gap:5px;flex-wrap:wrap;margin-left:6px}
+.crew-dots i{width:9px;height:19px;border-radius:5px 5px 2px 2px;background:var(--line);transition:background .2s}
+.crew-dots i.on{background:var(--sea)}
+
+.budget-val{font-size:2rem;font-weight:300;line-height:1.1;font-variant-numeric:tabular-nums;display:block;margin-bottom:10px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:none;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:linear-gradient(90deg,var(--navy) var(--p,50%),var(--line) var(--p,50%))}
+input[type=range]::-moz-range-track{height:3px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:3px;background:var(--navy)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;margin-top:-11px;border-radius:50%;background:var(--white);border:2px solid var(--navy);box-shadow:0 2px 6px rgba(11,42,71,.25)}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--white);border:2px solid var(--navy)}
+input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
+.range-ends{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted)}
+
+.advice{margin-top:30px;padding:16px 18px;border-left:3px solid var(--sea);background:#e6f0f0;display:flex;gap:14px 20px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.advice p{margin:0;font-size:.92rem;flex:1 1 220px}
+.note{margin:14px 0 0;font-size:.88rem;color:var(--muted)}
+.note.alert{color:#8a4b12}
+
+/* ---------- Pituusviivain ja hytit ---------- */
+.ruler{display:grid;grid-template-columns:repeat(5,1fr);position:relative;padding-top:12px;border-bottom:1px solid var(--line)}
+.ruler::before{content:"";position:absolute;left:0;right:0;top:0;height:7px;background:repeating-linear-gradient(90deg,var(--muted) 0 1px,transparent 1px 4%);background-position:2% 0;opacity:.55}
+.cell{display:block;cursor:pointer;position:relative}
+.cell-body{display:flex;flex-direction:column;align-items:center;padding:24px 4px 12px;border-top:1px solid var(--line);transition:background .18s,color .18s;height:100%}
+.ruler .cell::before{content:"";position:absolute;left:50%;top:-12px;width:1px;height:12px;background:var(--ink)}
+.cell-big{font-size:1.7rem;font-weight:300;line-height:1;font-variant-numeric:tabular-nums}
+.cell-unit{font-size:.78rem;color:var(--muted);margin-top:4px}
+.cell:hover .cell-body{background:#e8eef0}
+.cell input:checked+.cell-body{background:var(--navy);color:#fff}
+.cell input:checked+.cell-body .cell-unit{color:rgba(255,255,255,.76)}
+.cell input:disabled+.cell-body{opacity:.35;cursor:not-allowed;background:none}
+.cell .tag{position:absolute;top:4px;left:50%;transform:translateX(-50%);margin:0;font-size:.64rem;padding:0 7px;line-height:1.5}
+.cabins{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line)}
+.cabins .cell+.cell .cell-body,.ruler .cell+.cell .cell-body{border-left:1px solid var(--line)}
+
+/* ---------- Värit ja tekstikentät ---------- */
+.swatches{display:grid;grid-template-columns:repeat(2,1fr);gap:0;border-bottom:1px solid var(--line)}
+.swatch{display:block;cursor:pointer}
+.swatch-body{display:grid;grid-template-columns:64px 1fr;gap:2px 14px;align-items:center;padding:14px;border-top:1px solid var(--line);border-left:3px solid transparent;height:100%}
+.swatch:nth-child(even) .swatch-body{border-left:1px solid var(--line)}
+.swatch-body svg{grid-row:span 2;width:64px;height:26px}
+.swatch-name{font-weight:600;font-size:.95rem;align-self:end}
+.swatch-price{font-size:.82rem;color:var(--muted);align-self:start;font-variant-numeric:tabular-nums}
+.swatch:hover .swatch-body{background:#e8eef0}
+.swatch input:checked+.swatch-body{background:var(--navy);color:#fff}
+.swatch input:checked+.swatch-body .swatch-price{color:rgba(255,255,255,.76)}
+.field label{display:block;font-size:.95rem;font-weight:600;margin:30px 0 4px}
+.field small{display:block;color:var(--muted);margin-bottom:10px;font-size:.88rem}
+.field input,.storybox input{width:100%;padding:12px 14px;border:1px solid #9aa9b4;border-radius:3px;background:#fff;font-size:1rem;color:var(--ink)}
+.field input:focus-visible,.storybox input:focus-visible{outline:2px solid var(--sea);outline-offset:1px;border-color:var(--sea-deep)}
+
+/* ---------- Painikkeet ---------- */
+.nav{display:flex;justify-content:space-between;gap:12px;margin-top:36px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:13px 22px;border-radius:3px;border:1px solid var(--navy);background:none;font-weight:600;font-size:.95rem;text-decoration:none;color:var(--ink);text-align:center;transition:background .18s,color .18s}
+.btn:hover{background:var(--navy);color:#fff}
+.btn:focus-visible{outline:2px solid var(--sea);outline-offset:3px}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-primary:hover{background:var(--navy-2)}
+.btn-small{padding:8px 14px;font-size:.86rem;background:#fff}
+.btn-cta{width:100%;padding:18px 22px;font-size:1.02rem;background:var(--brass-hi);border-color:var(--brass-hi);color:var(--abyss)}
+.btn-cta:hover{background:#e9d3a6;border-color:#e9d3a6;color:var(--abyss)}
+.btn[hidden]{display:none}
+
+/* ---------- Yhteenveto ---------- */
+.spec{margin:0;border-bottom:1px solid var(--line)}
+.spec div{display:grid;grid-template-columns:minmax(110px,.8fr) minmax(0,1.4fr) auto;gap:12px;align-items:baseline;padding:11px 0;border-top:1px solid var(--line)}
+.spec dt{color:var(--muted);font-size:.9rem}
+.spec dd{margin:0;font-weight:600}
+.spec button{background:none;border:0;padding:2px 0;font-size:.82rem;color:var(--sea-deep);text-decoration:underline;text-underline-offset:3px}
+.total{margin-top:22px;padding:22px 24px;background:#fff;border:1px solid var(--line);border-radius:4px}
+.total-label{margin:0;font-size:.86rem;color:var(--muted)}
+.total-price{margin:4px 0 0;font-size:clamp(1.6rem,2.6vw,2.2rem);font-weight:300;letter-spacing:-.01em;line-height:1.2;font-variant-numeric:tabular-nums}
+.total-budget{margin:10px 0 0;font-size:.9rem;font-weight:600}
+.total-budget[data-status="ok"]{color:#1d7a55}
+.total-budget[data-status="warn"]{color:#8a6410}
+.total-budget[data-status="over"]{color:#b23a2c}
+.lines{list-style:none;margin:18px 0 0;padding:14px 0 0;border-top:1px solid var(--line);font-size:.86rem;color:var(--muted)}
+.lines li{display:flex;justify-content:space-between;gap:16px;padding:3px 0}
+.lines span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
+
+.storybox{margin-top:8px;padding:26px 24px 24px;border-radius:4px;background:var(--navy);color:#fff;border-left:4px solid var(--brass-hi)}
+.storybox h3{margin:0 0 6px;font-size:1.3rem;font-weight:400;letter-spacing:-.01em;color:#fff}
+.storybox>p{margin:0 0 4px;font-size:.92rem;color:rgba(255,255,255,.8)}
+.storybox label{display:block;font-size:.92rem;font-weight:600;margin:16px 0 6px}
+.storybox label small{display:block;font-weight:400;color:rgba(255,255,255,.68);font-size:.8rem;margin-top:1px}
+.story-error{min-height:1.3em;margin:10px 0 8px;font-size:.86rem;color:#ffb9ab;font-weight:600}
+.btn-story,.btn-story2{width:100%;background:var(--brass-hi);border-color:var(--brass-hi);color:var(--abyss)}
+.btn-story{padding:19px 22px;font-size:1.1rem}
+.btn-story2{margin-top:14px;padding:16px 22px;font-size:1rem}
+.btn-story:hover,.btn-story2:hover{background:#e9d3a6;border-color:#e9d3a6;color:var(--abyss)}
+.btn-story:focus-visible{outline-color:#fff}
+.btn-story svg,.btn-story2 svg{width:18px;height:18px;fill:currentColor}
+
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px}
+.actions a{grid-column:1/-1}
+.cta-lead{margin:26px 0 0;font-size:.95rem}
+.fine{margin:18px 0 0;font-size:.78rem;color:var(--muted)}
+.feedback{min-height:1.4em;margin:10px 0 0;font-size:.86rem;color:var(--sea-deep);font-weight:600}
+.restart{margin-top:8px;background:none;border:0;padding:6px 0;font-size:.86rem;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+
+/* ---------- Tarina-animaatio ---------- */
+.story{position:fixed;inset:0;z-index:50;background:rgba(3,10,24,.94);display:grid;place-items:center}
+.story-frame{position:relative;height:min(100vh,940px);height:min(100dvh,940px);aspect-ratio:9/16;max-width:100vw;overflow:hidden;background:#030a18;border-radius:6px;color:#fff}
+.story-frame>svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.story-top{position:absolute;top:0;left:0;right:0;z-index:4;padding:12px 12px 0;background:linear-gradient(rgba(3,10,24,.45),rgba(3,10,24,0))}
+.story-bars{display:flex;gap:4px}
+.story-bars i{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.3);overflow:hidden}
+.story-bars b{display:block;height:100%;width:0;background:#fff}
+.story-ctrl{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.story-brand{font-size:.68rem;letter-spacing:.22em;font-weight:500;padding-left:4px}
+.story-ctrl div{display:flex;gap:6px}
+.story-icon{width:40px;height:40px;border-radius:50%;border:0;background:rgba(3,10,24,.4);display:grid;place-items:center;padding:0}
+.story-icon svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.story-icon:focus-visible,.share button:focus-visible,.end-row button:focus-visible{outline:2px solid var(--brass-hi);outline-offset:2px}
+.caption{position:absolute;left:8%;right:8%;bottom:8%;z-index:2;margin:0;text-align:center;font-size:clamp(1.05rem,2.5vh,1.45rem);line-height:1.36;font-weight:500;text-shadow:0 1px 14px rgba(3,10,24,.9),0 0 3px rgba(3,10,24,.6)}
+.caption.in{animation:capIn .7s ease both}
+@keyframes capIn{from{opacity:0;transform:translateY(10px)}}
+.story-cover{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;justify-content:flex-end;padding:76px 7% 6%;background:linear-gradient(rgba(3,10,24,.25),rgba(3,10,24,.9) 55%)}
+.story-end{position:absolute;left:0;right:0;bottom:0;z-index:3;max-height:calc(100% - 64px);overflow-y:auto;padding:40px 7% 4%;background:linear-gradient(rgba(3,10,24,0),rgba(3,10,24,.94) 40px);animation:capIn .8s ease both}
+.story-cover h2{margin:0 0 8px;font-size:clamp(1.4rem,3.4vh,1.9rem);font-weight:300;line-height:1.15;letter-spacing:-.015em}
+.story-end h2{margin:0 0 12px;font-size:clamp(1.15rem,2.7vh,1.45rem);font-weight:400;line-height:1.2;letter-spacing:-.01em}
+.story-cover p{margin:0 0 16px;font-size:.95rem;color:rgba(255,255,255,.84)}
+.story-cover .btn,.story-end .btn-cta{width:100%}
+.story-end .btn-cta{padding:14px 18px;font-size:.95rem}
+.invite{position:absolute;z-index:2;top:84px;left:50%;height:calc(54% - 84px);aspect-ratio:4/5;transform:translateX(-50%);border-radius:6px;box-shadow:0 18px 50px rgba(0,0,0,.55);background:#fff}
+.invite.in{animation:cardIn .9s cubic-bezier(.2,.9,.3,1.15) both}
+@keyframes cardIn{from{opacity:0;transform:translateX(-50%) translateY(46px) scale(.88) rotate(-4deg)}}
+.share-main{display:flex;gap:8px;margin-bottom:6px}
+.share-main button{flex:1;padding:13px 4px;border-radius:3px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.08);color:#fff;font-size:.9rem;font-weight:600}
+.share-main button.pri{background:#fff;color:var(--abyss);border-color:#fff}
+.share-main button:hover{background:rgba(255,255,255,.22)}
+.share-main button.pri:hover{background:#e6edf1}
+.share{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 10px}
+.share button{padding:10px 4px;border-radius:3px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.08);color:#fff;font-size:.84rem;font-weight:600}
+.share button:hover{background:rgba(255,255,255,.2)}
+.share-main button:focus-visible,.more summary:focus-visible{outline:2px solid var(--brass-hi);outline-offset:2px}
+.story-feedback{margin:0 0 2px;font-size:.82rem;color:var(--brass-hi);font-weight:600}
+.story-feedback:empty{display:none}
+.more{margin:0 0 12px}
+.more summary{cursor:pointer;font-size:.86rem;padding:6px 0;text-decoration:underline;text-underline-offset:3px;color:rgba(255,255,255,.9)}
+.tips{margin:0 0 6px;padding:0 0 0 18px;font-size:.8rem;color:rgba(255,255,255,.78)}
+.tips li{margin-bottom:4px}
+.end-row{display:flex;justify-content:space-between;gap:10px;margin-top:8px}
+.end-row button{background:none;border:0;color:#fff;font-size:.86rem;text-decoration:underline;text-underline-offset:3px;padding:8px 0}
+
+#storySvg .sky,#storySvg .tint,#sStars,#sMoon,#sAurora{opacity:0;transition:opacity 1.8s ease}
+#storySvg.k-dawn .sky-dawn,#storySvg.k-day .sky-day,#storySvg.k-sunset .sky-sunset,#storySvg.k-night .sky-night{opacity:1}
+#storySvg.k-dawn .tint-dawn{opacity:.9}
+#storySvg.k-sunset .tint-sunset{opacity:.92}
+#storySvg.k-night .tint-night{opacity:.94}
+#storySvg.north .tint-north{opacity:.3}
+#storySvg.k-night #sStars,#storySvg.k-night #sMoon{opacity:1}
+#storySvg.k-night.isle.north #sAurora{opacity:1}
+#storySvg.k-night.isle.north #sMoon{opacity:.5}
+.glint{opacity:0;transition:opacity 2.5s ease}
+.k-dawn #sGlintA,.k-sunset #sGlintB{opacity:1}
+#sSun{transition:transform 6.5s ease-in-out,opacity 2s ease}
+.k-dawn #sSun{transform:translate(0,-150px)}
+.k-day #sSun{transform:translate(70px,-480px)}
+.k-sunset #sSun{transform:translate(400px,-150px)}
+.k-night #sSun{transform:translate(400px,40px);opacity:0}
+#sClouds{transition:opacity 2s ease}
+.k-night #sClouds{opacity:.12}
+#sIsle{transform:translateX(640px);transition:transform 7s cubic-bezier(.2,.6,.3,1)}
+.isle #sIsle{transform:none}
+#sHarbour{opacity:0;transform:translateX(30px)}
+.harbour #sHarbour{opacity:1;transform:translateX(-120px);transition:transform 9s linear}
+#sBeam{opacity:0}
+.k-night #sBeam{opacity:1}
+.reset #sIsle,.reset #sSun,.reset #sWorld,.reset #sHeel{transition:none}
+.warm #isleNorth,.north #isleWarm{display:none}
+#sWorld{transform-origin:360px 760px;transition:transform 8s ease-in-out}
+.sea #sWorld{transform:scale(1.07)}
+.ev-dolphins #sWorld,.ev-whale #sWorld{transform:scale(1.1) translateY(-20px)}
+.isle.k-night #sWorld{transform:scale(1.05)}
+#sHeel{transform-origin:360px 760px;transition:transform 4.5s ease-in-out}
+.sea #sHeel{transform:rotate(-1.3deg)}
+.isle #sHeel{transform:translateX(-58px) scale(.78)}
+.pre-harbour #sHeel{transform:translateX(78px) scale(.8)}
+.harbour #sHeel{transform:translateX(78px) scale(.8) rotate(-1.3deg)}
+#sBob{transform-origin:360px 760px;animation:bob 6s ease-in-out infinite}
+.sdrift{animation:drift 7s linear infinite}
+.sea .sdrift{animation-duration:1.5s}
+.scloud{animation:scloud 46s linear infinite}
+@keyframes scloud{from{transform:translateX(80px)}to{transform:translateX(-160px)}}
+.sea .scloud{animation-duration:20s}
+.dolphin{opacity:0;transform-box:fill-box;transform-origin:50% 50%}
+.ev-dolphins .dolphin{animation:leap 2.6s infinite}
+.ev-dolphins .dolphin.d2{animation-delay:.9s}
+.ev-dolphins .dolphin.d3{animation-delay:1.7s}
+@keyframes leap{
+  0%{transform:translate(0,48px) rotate(-52deg);opacity:0;animation-timing-function:ease-out}
+  12%{opacity:1}
+  50%{transform:translate(72px,-58px) rotate(0deg);opacity:1;animation-timing-function:ease-in}
+  88%{opacity:1}
+  100%{transform:translate(144px,48px) rotate(52deg);opacity:0}
+}
+#sWhale{opacity:0}
+.ev-whale #sWhale{opacity:1}
+#sFluke{transform:translateY(150px);transform-box:fill-box;transform-origin:50% 100%}
+.ev-whale #sFluke{animation:fluke 6.2s ease-in-out 1.4s both}
+@keyframes fluke{0%{transform:translateY(150px)}30%{transform:translateY(0) rotate(-5deg)}58%{transform:translateY(-6px) rotate(5deg)}100%{transform:translateY(150px)}}
+#sHump{transform:translateY(26px)}
+.ev-whale #sHump{animation:hump 3.6s ease-in-out both}
+@keyframes hump{0%{transform:translateY(26px)}28%,62%{transform:translateY(0)}100%{transform:translateY(26px)}}
+#sSpout{opacity:0}
+.ev-whale #sSpout{animation:spout 2.2s ease-out .7s both}
+@keyframes spout{0%{opacity:0;transform:translateY(14px)}25%{opacity:.9}100%{opacity:0;transform:translateY(-18px)}}
+#sSquall{opacity:0}
+.ev-squall #sSquall{opacity:1;animation:squall 5.4s linear both}
+@keyframes squall{from{transform:translateX(780px)}to{transform:translateX(-560px)}}
+#sRainbow{opacity:0}
+.ev-squall #sRainbow{animation:rainbow 2.6s ease 3.8s both}
+@keyframes rainbow{to{opacity:.85}}
+.shoot{opacity:0}
+.ev-stars .shoot{animation:shoot 2.8s ease-out infinite}
+.ev-stars .shoot.s2{animation-delay:1.1s}
+.ev-stars .shoot.s3{animation-delay:1.9s}
+@keyframes shoot{0%{opacity:0;transform:translate(60px,-34px)}10%{opacity:1}42%{opacity:0;transform:translate(-170px,98px)}100%{opacity:0;transform:translate(-170px,98px)}}
+#sSwim{opacity:0}
+.swim #sSwim{opacity:1;transition:opacity 1s ease 3.6s}
+.ring{transform-box:fill-box;transform-origin:50% 50%;opacity:0}
+.swim .ring{animation:ring 2.2s ease-out 3.6s infinite}
+.swim .ring.r2{animation-delay:4.7s}
+@keyframes ring{from{transform:scale(.3);opacity:.9}to{transform:scale(1.6);opacity:0}}
+#sDim{opacity:0;transition:opacity 1.2s ease}
+.card #sDim{opacity:.62}
+.twinkle{animation:twinkle 2.4s ease-in-out infinite alternate}
+@keyframes twinkle{to{opacity:.25}}
+#sAurora path{animation:aurora 5s ease-in-out infinite alternate}
+@keyframes aurora{to{opacity:.15;transform:translateY(14px)}}
+
+/* ---------- Liike ---------- */
+#bob{transform-origin:500px 540px;animation:bob 8s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:rotate(-.45deg) translateY(1.5px)}50%{transform:rotate(.45deg) translateY(-2px)}}
+.drift{animation:drift 9s linear infinite}
+.drift.slow{animation-duration:15s}
+@keyframes drift{to{transform:translateX(-120px)}}
+.cloud{animation:cloud 70s ease-in-out infinite alternate}
+@keyframes cloud{to{transform:translateX(60px)}}
+.pop{transform-box:fill-box;transform-origin:50% 100%;animation:pop .5s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes pop{from{transform:scale(.2);opacity:0}}
+@media (prefers-reduced-motion:reduce){
+  #bob,.drift,.cloud,.pop,#sBob,.sdrift,.scloud,.twinkle,#sAurora path,.caption.in,.story-end{animation:none}
+  .ev-dolphins .dolphin{animation:none;opacity:1;transform:translate(72px,-58px)}
+  .ev-whale #sFluke,.ev-whale #sHump{animation:none;transform:none}
+  .ev-squall #sSquall{animation:none;opacity:0}
+  .ev-squall #sRainbow{animation:none;opacity:.85}
+  .ev-stars .shoot,.swim .ring,.invite.in{animation:none}
+  *{transition:none!important}
+}
+
+@media (min-width:901px) and (max-width:1240px){
+  .hud{grid-template-columns:minmax(0,1fr);gap:14px;padding:16px 20px 18px}
+  .hud-fine{display:none}
+}
+
+/* ---------- Puhelin ja tabletti ---------- */
+@media (max-width:900px){
+  .app{display:block}
+  .stage{height:40vh;height:40dvh;min-height:240px;z-index:5}
+  .brand{top:12px;left:14px;font-size:.66rem;letter-spacing:.2em}
+  .chips{top:auto;bottom:10px;left:12px;right:12px;gap:4px;max-width:none;justify-content:flex-start}
+  .chips li{font-size:.68rem;padding:2px 8px}
+  .panel{padding:26px 18px 150px}
+  .hud{position:fixed;left:0;right:0;bottom:0;border-radius:0;border:0;border-top:1px solid rgba(220,192,140,.5);background:rgba(6,24,43,.95);grid-template-columns:minmax(0,1fr);gap:8px;padding:10px 16px calc(12px + env(safe-area-inset-bottom))}
+  .hud-label{display:none}
+  .hud-price{font-size:1.2rem}
+  .hud-fine{display:none}
+  .meter-head{margin-bottom:8px;font-size:.78rem}
+  .meter-mark span{display:none}
+  .meter-track{height:6px}
+  .steps-wrap{margin-top:24px}
+  .step{margin-top:26px}
+  .opt-body{grid-template-columns:26px minmax(0,1fr);padding:14px 12px}
+  .opt-price{grid-column:2;text-align:left;padding-top:0}
+  .swatches{grid-template-columns:1fr}
+  .swatch:nth-child(even) .swatch-body{border-left:3px solid transparent}
+  .actions{grid-template-columns:1fr}
+  .spec div{grid-template-columns:minmax(0,1fr) auto;gap:0 12px}
+  .spec dt{grid-column:1/-1}
+  .crew output{font-size:2.5rem}
+  .storybox{padding:20px 16px}
+}
+@media (max-width:900px) and (max-height:480px){
+  .stage{position:relative;height:78vh}
+}
+@media (max-height:720px){
+  .invite{top:70px;height:calc(50% - 74px)}
+  .story-end{padding-top:30px}
+  .story-end .btn-cta{padding:11px 14px;font-size:.88rem}
+}
+@media (max-width:600px){
+  .story-frame{width:100vw;height:100vh;height:100dvh;aspect-ratio:auto;border-radius:0}
+}
+</style>
 </head>
 <body>
-<p><a href="index1.html">Build your dream catamaran</a></p>
+<noscript><p style="padding:24px">This app needs JavaScript to work. Please turn it on in your browser settings.</p></noscript>
+
+<div class="app">
+
+  <!-- ================= VASEN: LIVE-NÄKYMÄ ================= -->
+  <section class="stage" id="stage" aria-label="Preview of your boat">
+    <svg id="scene" viewBox="150 -40 700 700" preserveAspectRatio="xMidYMid slice" role="img" aria-labelledby="sceneTitle">
+      <title id="sceneTitle">Catamaran at sea</title>
+      <defs>
+        <linearGradient id="gSky" gradientUnits="userSpaceOnUse" x1="0" y1="-320" x2="0" y2="540">
+          <stop offset="0" stop-color="#051326"/><stop offset=".42" stop-color="#0d3050"/>
+          <stop offset=".78" stop-color="#236f88"/><stop offset="1" stop-color="#6fbcb8"/>
+        </linearGradient>
+        <radialGradient id="gGlow" gradientUnits="userSpaceOnUse" cx="215" cy="440" r="330">
+          <stop offset="0" stop-color="#f5deaa" stop-opacity=".75"/><stop offset=".35" stop-color="#e9c98e" stop-opacity=".28"/>
+          <stop offset="1" stop-color="#e9c98e" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="gSea" gradientUnits="userSpaceOnUse" x1="0" y1="540" x2="0" y2="880">
+          <stop offset="0" stop-color="#1f8490"/><stop offset=".3" stop-color="#11547a"/><stop offset="1" stop-color="#06182b"/>
+        </linearGradient>
+        <linearGradient id="gSeaFront" gradientUnits="userSpaceOnUse" x1="0" y1="538" x2="0" y2="600">
+          <stop offset="0" stop-color="#1f8490" stop-opacity=".55"/><stop offset=".35" stop-color="#17708a" stop-opacity=".82"/>
+          <stop offset="1" stop-color="#11547a" stop-opacity="1"/>
+        </linearGradient>
+        <linearGradient id="gFade" gradientUnits="userSpaceOnUse" x1="0" y1="540" x2="0" y2="790">
+          <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/>
+        </linearGradient>
+        <mask id="mRefl" maskUnits="userSpaceOnUse" x="-2000" y="540" width="5000" height="300">
+          <rect x="-2000" y="540" width="5000" height="300" fill="url(#gFade)"/>
+        </mask>
+        <filter id="fBlur" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="1.4 3.2"/></filter>
+      </defs>
+
+      <rect x="-2000" y="-2000" width="5000" height="2541" fill="url(#gSky)"/>
+      <g fill="#fff" opacity=".55">
+        <circle cx="330" cy="-150" r="1.1"/><circle cx="455" cy="-60" r=".9"/><circle cx="610" cy="-190" r="1.2"/>
+        <circle cx="720" cy="-30" r=".9"/><circle cx="820" cy="-120" r="1"/><circle cx="180" cy="-70" r=".9"/>
+        <circle cx="260" cy="40" r=".8"/><circle cx="780" cy="90" r=".8"/><circle cx="60" cy="-200" r="1"/>
+        <circle cx="940" cy="-240" r="1.1"/><circle cx="560" cy="-320" r="1"/><circle cx="380" cy="-380" r=".9"/>
+      </g>
+      <rect x="-2000" y="-2000" width="5000" height="2541" fill="url(#gGlow)"/>
+      <circle cx="215" cy="400" r="23" fill="#f6e6bd"/>
+      <g class="cloud" fill="#fff" opacity=".1">
+        <ellipse cx="640" cy="250" rx="130" ry="9"/><ellipse cx="700" cy="262" rx="90" ry="7"/>
+        <ellipse cx="300" cy="170" rx="100" ry="7"/><ellipse cx="900" cy="330" rx="120" ry="8"/>
+      </g>
+      <path d="M-260,541q70,-11 150,-8q60,2 110,8z" fill="#0e3c58" opacity=".8"/>
+      <path d="M560,541q24,-13 62,-11q22,-12 58,-5q36,-9 74,3q46,3 86,13z" fill="#0d3852" opacity=".85"/>
+      <path d="M860,541q40,-20 96,-17q60,-8 110,6q40,4 70,11z" fill="#0f4560" opacity=".7"/>
+
+      <rect x="-2000" y="540" width="5000" height="2500" fill="url(#gSea)"/>
+      <g fill="#f6e6bd">
+        <rect x="193" y="548" width="44" height="2.4" rx="1.2" opacity=".55"/><rect x="201" y="557" width="30" height="2.2" rx="1.1" opacity=".42"/>
+        <rect x="190" y="568" width="50" height="2.2" rx="1.1" opacity=".3"/><rect x="204" y="581" width="24" height="2" rx="1" opacity=".22"/>
+        <rect x="196" y="597" width="38" height="2" rx="1" opacity=".14"/>
+      </g>
+      <path id="waveBack" class="drift slow" fill="none" stroke="#bfe6e1" stroke-opacity=".16" stroke-width="1.2"/>
+
+      <g id="bob"><g id="boat"></g></g>
+
+      <path id="waveFront" class="drift" fill="url(#gSeaFront)"/>
+      <g mask="url(#mRefl)" opacity=".2" filter="url(#fBlur)"><use href="#boat" transform="matrix(1 0 0 -1 0 1082)"/></g>
+      <path id="waveLine1" class="drift" fill="none" stroke="#d5efec" stroke-opacity=".3" stroke-width="1.1"/>
+      <path id="waveLine2" class="drift slow" fill="none" stroke="#d5efec" stroke-opacity=".14" stroke-width="1"/>
+    </svg>
+
+    <div class="brand" aria-hidden="true">GLOBAL CATAMARANS</div>
+    <ul class="chips" id="chips" aria-hidden="true"></ul>
+
+    <div class="hud" id="hud">
+      <div>
+        <p class="hud-label">Estimated price range</p>
+        <p class="hud-price" id="hudPrice" aria-live="polite"></p>
+      </div>
+      <div class="meter" id="meter" data-status="ok">
+        <div class="meter-head">
+          <span class="meter-status" id="meterStatus"></span>
+          <span class="meter-note" id="meterNote"></span>
+        </div>
+        <div class="meter-track" aria-hidden="true">
+          <div class="meter-band" id="meterBand"></div>
+          <div class="meter-mark" id="meterMark"><span id="meterMarkLabel"></span></div>
+        </div>
+      </div>
+      <p class="hud-fine">Indicative estimate, not an offer.</p>
+    </div>
+  </section>
+
+  <!-- ================= OIKEA: KONFIGURAATTORI ================= -->
+  <main class="panel">
+    <header class="intro">
+      <h1>Build your dream catamaran</h1>
+      <p>Make your choices and watch her take shape. At the end you get a price estimate and a short animated story with an invitation to send.</p>
+    </header>
+
+    <nav aria-label="Steps">
+      <div class="steps-wrap"><span class="steps-fill" id="stepsFill" aria-hidden="true"></span><ol class="steps" id="steps"></ol></div>
+    </nav>
+
+    <form id="form" autocomplete="off" onsubmit="return false">
+
+      <section class="step" data-step="0">
+        <h2 tabindex="-1">How will you use her?</h2>
+        <p class="lead">The way you plan to use the boat sets the equipment level and shapes our recommendations.</p>
+        <div class="opts" id="usageOpts" role="radiogroup" aria-label="Use"></div>
+      </section>
+
+      <section class="step" data-step="1" hidden>
+        <h2 tabindex="-1">Who is coming, and what is the budget?</h2>
+        <p class="lead">Your crew appears on deck right away. We check every choice against your budget.</p>
+        <h3 id="crewLabel">People on board</h3>
+        <div class="crew" role="group" aria-labelledby="crewLabel">
+          <button type="button" id="crewMinus" aria-label="One person fewer">−</button>
+          <output id="crewOut" aria-live="polite"></output>
+          <button type="button" id="crewPlus" aria-label="One person more">+</button>
+          <div class="crew-dots" id="crewDots" aria-hidden="true"></div>
+        </div>
+        <h3><label for="budget">Target budget</label></h3>
+        <output class="budget-val" id="budgetOut" for="budget"></output>
+        <input type="range" id="budget" name="budget">
+        <div class="range-ends"><span id="budgetMin"></span><span id="budgetMax"></span></div>
+        <div class="advice">
+          <p id="adviceText"></p>
+          <button type="button" class="btn btn-small" id="applyAdvice">Use recommendation</button>
+        </div>
+      </section>
+
+      <section class="step" data-step="2" hidden>
+        <h2 tabindex="-1">How big?</h2>
+        <p class="lead">Length drives the price more than anything else. Every five feet adds noticeably more space and payload.</p>
+        <h3 id="lenLabel">Length</h3>
+        <div class="ruler" id="lengthOpts" role="radiogroup" aria-labelledby="lenLabel"></div>
+        <p class="note" id="lengthNote"></p>
+        <h3 id="cabLabel">Cabins</h3>
+        <div class="cabins" id="cabinOpts" role="radiogroup" aria-labelledby="cabLabel"></div>
+        <p class="note" id="cabinNote" aria-live="polite"></p>
+      </section>
+
+      <section class="step" data-step="3" hidden>
+        <h2 tabindex="-1">What moves her?</h2>
+        <p class="lead">A catamaran has two engines, one in each hull. Choose what drives them, and whether she carries sails.</p>
+        <div class="opts" id="propOpts" role="radiogroup" aria-label="Propulsion"></div>
+      </section>
+
+      <section class="step" data-step="4" hidden>
+        <h2 tabindex="-1">Where does the power come from?</h2>
+        <p class="lead">The panels appear on the roof. The longer you stay at anchor, the more of your own power you need.</p>
+        <div class="opts" id="energyOpts" role="radiogroup" aria-label="Energy system"></div>
+        <p class="note" id="energyNote"></p>
+      </section>
+
+      <section class="step" data-step="5" hidden>
+        <h2 tabindex="-1">Finish the look</h2>
+        <p class="lead">Pick a hull colour and give her a name if you like.</p>
+        <div class="swatches" id="colorOpts" role="radiogroup" aria-label="Hull colour"></div>
+        <div class="field">
+          <label for="boatName">Boat name</label>
+          <small>Optional. The name is painted on the hull.</small>
+          <input type="text" id="boatName" name="name" maxlength="18" placeholder="For example Aurora">
+        </div>
+      </section>
+
+      <section class="step" data-step="6" hidden>
+        <h2 tabindex="-1" id="summaryTitle">Your dream catamaran</h2>
+        <p class="lead">She is ready. Send her on her first voyage, then check the numbers below.</p>
+
+        <div class="storybox" id="storyBox">
+          <h3>Turn her into a story and an invitation</h3>
+          <p>Three answers, and your catamaran sails off in a 30-second animated story. It ends with an invitation card you can send.</p>
+          <label for="crewNames">Who is on board? <small>First names, 1 to 4, separated by commas</small></label>
+          <input type="text" id="crewNames" maxlength="80" placeholder="Anna, Mikko" autocomplete="off">
+          <label for="dreamPlace">Where would you sail her?</label>
+          <input type="text" id="dreamPlace" maxlength="40" placeholder="The Caribbean, Mallorca, Lofoten…" autocomplete="off">
+          <label for="inviteNames">Who would you invite along? <small>1 to 4 names. They get the invitation card.</small></label>
+          <input type="text" id="inviteNames" maxlength="80" placeholder="Sanna, Olli" autocomplete="off">
+          <p class="story-error" id="storyError" role="alert"></p>
+          <button type="button" class="btn btn-story" id="storyBtn"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3l12 7-12 7z"/></svg>Create your story</button>
+        </div>
+
+        <h3>Your choices</h3>
+        <dl class="spec" id="spec"></dl>
+        <div class="total">
+          <p class="total-label">Estimated price range</p>
+          <p class="total-price" id="totalPrice"></p>
+          <p class="total-budget" id="totalBudget"></p>
+          <ul class="lines" id="lines"></ul>
+        </div>
+
+        <button type="button" class="btn btn-story2" id="storyBtn2"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3l12 7-12 7z"/></svg>Create your story</button>
+
+        <p class="cta-lead">Or tell us what you built. We look for boats on the market that match these wishes.</p>
+        <div class="actions">
+          <a class="btn" id="cta" target="_blank" rel="noopener"></a>
+          <button type="button" class="btn" id="copyBtn">Copy details</button>
+          <button type="button" class="btn" id="downloadBtn">Download summary</button>
+        </div>
+        <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
+        <p class="fine" id="disclaimer"></p>
+        <button type="button" class="restart" id="restart">Start over</button>
+      </section>
+
+      <div class="nav">
+        <button type="button" class="btn" id="prevBtn">Back</button>
+        <button type="button" class="btn btn-primary" id="nextBtn">Next</button>
+      </div>
+    </form>
+  </main>
+</div>
+
+<!-- ================= TARINA-ANIMAATIO ================= -->
+<div class="story" id="story" role="dialog" aria-modal="true" aria-label="Your catamaran story" hidden>
+  <div class="story-frame">
+    <svg id="storySvg" viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="sDawn" gradientUnits="userSpaceOnUse" x1="0" y1="-200" x2="0" y2="760"><stop offset="0" stop-color="#1d2a55"/><stop offset=".5" stop-color="#6b5b8c"/><stop offset=".82" stop-color="#e59a8c"/><stop offset="1" stop-color="#fbd6a6"/></linearGradient>
+        <linearGradient id="sDay" gradientUnits="userSpaceOnUse" x1="0" y1="-200" x2="0" y2="760"><stop offset="0" stop-color="#1f66ad"/><stop offset=".55" stop-color="#58b2dc"/><stop offset="1" stop-color="#c8efea"/></linearGradient>
+        <linearGradient id="sSunset" gradientUnits="userSpaceOnUse" x1="0" y1="-200" x2="0" y2="760"><stop offset="0" stop-color="#1f2462"/><stop offset=".45" stop-color="#8d3f7c"/><stop offset=".78" stop-color="#f08a55"/><stop offset="1" stop-color="#fdd48a"/></linearGradient>
+        <linearGradient id="sNightSky" gradientUnits="userSpaceOnUse" x1="0" y1="-200" x2="0" y2="760"><stop offset="0" stop-color="#020816"/><stop offset=".6" stop-color="#081a35"/><stop offset="1" stop-color="#143659"/></linearGradient>
+        <linearGradient id="sSea" gradientUnits="userSpaceOnUse" x1="0" y1="760" x2="0" y2="1300"><stop offset="0" stop-color="#35bcc0"/><stop offset=".35" stop-color="#1583a6"/><stop offset="1" stop-color="#083a66"/></linearGradient>
+        <linearGradient id="sSeaFront" gradientUnits="userSpaceOnUse" x1="0" y1="758" x2="0" y2="830"><stop offset="0" stop-color="#35bcc0" stop-opacity=".55"/><stop offset=".4" stop-color="#2aa9b6" stop-opacity=".85"/><stop offset="1" stop-color="#1e97ad" stop-opacity="1"/></linearGradient>
+        <radialGradient id="sSunGlow"><stop offset="0" stop-color="#fff1c4" stop-opacity=".85"/><stop offset=".4" stop-color="#ffdf9a" stop-opacity=".3"/><stop offset="1" stop-color="#ffdf9a" stop-opacity="0"/></radialGradient>
+        <linearGradient id="sDawnSea" gradientUnits="userSpaceOnUse" x1="0" y1="760" x2="0" y2="1300"><stop offset="0" stop-color="#eab2a0"/><stop offset=".18" stop-color="#a98fae"/><stop offset=".5" stop-color="#56628f"/><stop offset="1" stop-color="#27365f"/></linearGradient>
+        <linearGradient id="sSunsetSea" gradientUnits="userSpaceOnUse" x1="0" y1="760" x2="0" y2="1300"><stop offset="0" stop-color="#f6a765"/><stop offset=".15" stop-color="#d0687a"/><stop offset=".45" stop-color="#6a3f84"/><stop offset="1" stop-color="#1d1d4f"/></linearGradient>
+        <linearGradient id="sNightSea" gradientUnits="userSpaceOnUse" x1="0" y1="760" x2="0" y2="1300"><stop offset="0" stop-color="#1a4266"/><stop offset=".3" stop-color="#0b2545"/><stop offset="1" stop-color="#030c1c"/></linearGradient>
+        <linearGradient id="sBeamG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff3c4" stop-opacity=".75"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></linearGradient>
+        <clipPath id="sWhaleClip"><rect x="380" y="620" width="340" height="316"/></clipPath>
+        <filter id="sBlur" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="22"/></filter>
+        <filter id="sNight"><feColorMatrix type="matrix" values=".46 0 0 0 0  0 .5 0 0 .01  0 0 .62 0 .05  0 0 0 1 0"/></filter>
+      </defs>
+      <g id="sWorld">
+        <rect class="sky sky-dawn" x="-200" y="-400" width="1120" height="1161" fill="url(#sDawn)"/>
+        <rect class="sky sky-day" x="-200" y="-400" width="1120" height="1161" fill="url(#sDay)"/>
+        <rect class="sky sky-sunset" x="-200" y="-400" width="1120" height="1161" fill="url(#sSunset)"/>
+        <rect class="sky sky-night" x="-200" y="-400" width="1120" height="1161" fill="url(#sNightSky)"/>
+        <g id="sStars" fill="#fff"></g>
+        <g stroke="#fff" stroke-width="2.4" stroke-linecap="round">
+          <line class="shoot s1" x1="560" y1="170" x2="612" y2="140"/>
+          <line class="shoot s2" x1="330" y1="110" x2="382" y2="80"/>
+          <line class="shoot s3" x1="650" y1="340" x2="702" y2="310"/>
+        </g>
+        <g id="sAurora" fill="none" stroke-linecap="round" filter="url(#sBlur)">
+          <path d="M-60,360 Q160,190 370,310 T790,230" stroke="#58f5ae" stroke-width="76" opacity=".8"/>
+          <path d="M-40,470 Q220,330 430,420 T800,360" stroke="#7fe7ff" stroke-width="46" opacity=".5"/>
+        </g>
+        <path id="sMoon" d="M566,214a44,44 0 1,0 30,76a36,36 0 1,1 -30,-76z" fill="#f4ecd2"/>
+        <g id="sSun"><circle cx="170" cy="760" r="150" fill="url(#sSunGlow)"/><circle cx="170" cy="760" r="46" fill="#ffecb5"/></g>
+        <g id="sClouds"><g class="scloud" fill="#fff" opacity=".55">
+          <ellipse cx="520" cy="330" rx="120" ry="15"/><ellipse cx="580" cy="346" rx="80" ry="11"/>
+          <ellipse cx="170" cy="450" rx="100" ry="12"/><ellipse cx="760" cy="520" rx="110" ry="12"/><ellipse cx="340" cy="210" rx="70" ry="9"/>
+        </g></g>
+        <g id="sRainbow" fill="none" stroke-width="12"></g>
+        <g id="sIsle"><g id="isleWarm"></g><g id="isleNorth"></g></g>
+        <g id="sHarbour"></g>
+        <rect x="-200" y="760" width="1120" height="800" fill="url(#sSea)"/>
+        <g id="sHeel"><g id="sBob"><g id="sBoatWrap"><g id="sBoat"></g></g><g id="sLights"></g></g></g>
+        <path id="sFront" class="sdrift" fill="url(#sSeaFront)"/>
+        <rect class="tint tint-north" x="-200" y="760" width="1120" height="800" fill="#0c3a57"/>
+        <path class="tint tint-dawn sdrift seaShape" fill="url(#sDawnSea)"/>
+        <path class="tint tint-sunset sdrift seaShape" fill="url(#sSunsetSea)"/>
+        <path class="tint tint-night sdrift seaShape" fill="url(#sNightSea)"/>
+        <g id="sGlintA" class="glint" fill="#fff1c4"><rect x="136" y="774" width="68" height="3" rx="1.5" opacity=".7"/><rect x="148" y="790" width="44" height="3" rx="1.5" opacity=".55"/><rect x="130" y="810" width="80" height="3" rx="1.5" opacity=".4"/><rect x="152" y="836" width="36" height="3" rx="1.5" opacity=".3"/><rect x="140" y="868" width="60" height="3" rx="1.5" opacity=".2"/></g>
+        <g id="sGlintB" class="glint" fill="#fff1c4"><rect x="536" y="774" width="68" height="3" rx="1.5" opacity=".7"/><rect x="548" y="790" width="44" height="3" rx="1.5" opacity=".55"/><rect x="530" y="810" width="80" height="3" rx="1.5" opacity=".4"/><rect x="552" y="836" width="36" height="3" rx="1.5" opacity=".3"/><rect x="540" y="868" width="60" height="3" rx="1.5" opacity=".2"/></g>
+        <g transform="translate(110,935)"><g class="dolphin d1"><path d="M-32,6Q-8,-18 22,-7Q31,-3 35,3Q27,2 20,5Q4,13 -18,9L-31,17L-28,8Z" fill="#4a7696"/><path d="M-3,-10L5,-22L11,-9Z" fill="#3c6382"/><path d="M-12,7Q6,10 22,3Q8,12 -12,9Z" fill="#cfe3ee"/></g></g>
+        <g transform="translate(300,985)"><g class="dolphin d2"><path d="M-32,6Q-8,-18 22,-7Q31,-3 35,3Q27,2 20,5Q4,13 -18,9L-31,17L-28,8Z" fill="#4a7696"/><path d="M-3,-10L5,-22L11,-9Z" fill="#3c6382"/><path d="M-12,7Q6,10 22,3Q8,12 -12,9Z" fill="#cfe3ee"/></g></g>
+        <g transform="translate(455,915)"><g class="dolphin d3"><path d="M-32,6Q-8,-18 22,-7Q31,-3 35,3Q27,2 20,5Q4,13 -18,9L-31,17L-28,8Z" fill="#4a7696"/><path d="M-3,-10L5,-22L11,-9Z" fill="#3c6382"/><path d="M-12,7Q6,10 22,3Q8,12 -12,9Z" fill="#cfe3ee"/></g></g>
+        <g id="sWhale">
+          <g clip-path="url(#sWhaleClip)">
+            <ellipse id="sHump" cx="456" cy="940" rx="52" ry="15" fill="#2f4f68"/>
+            <g transform="translate(566,818) scale(1.35)"><path id="sFluke" d="M-9,112C-7,62 -4,42 0,31C-11,23 -36,19 -56,2C-32,4 -13,9 0,17C13,9 32,4 56,2C36,19 11,23 0,31C4,42 7,62 9,112Z" fill="#2f4f68"/></g>
+          </g>
+          <g transform="translate(438,928)"><g id="sSpout" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"><path d="M0,0q-5,-28 -17,-44M0,0q0,-34 0,-54M0,0q5,-28 17,-44"/></g></g>
+          <ellipse cx="566" cy="937" rx="48" ry="6" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.8"/>
+          <ellipse cx="456" cy="937" rx="62" ry="6" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="1.6"/>
+        </g>
+        <g id="sSwim">
+          <ellipse class="ring" cx="592" cy="813" rx="28" ry="6" fill="none" stroke="#fff" stroke-width="1.8"/>
+          <ellipse class="ring r2" cx="592" cy="813" rx="28" ry="6" fill="none" stroke="#fff" stroke-width="1.8"/>
+          <path d="M583,807q-10,-13 -19,-4M601,807q10,-13 19,-4" stroke="#e8b98f" stroke-width="3.8" fill="none" stroke-linecap="round"/>
+          <circle cx="592" cy="804" r="7.5" fill="#e8b98f"/>
+          <path d="M574,813h36" stroke="#fff" stroke-width="2.2" opacity=".75" stroke-linecap="round"/>
+        </g>
+        <g id="sSquall"></g>
+        <path id="sWave" class="sdrift" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="1.4"/>
+      </g>
+      <rect id="sDim" x="0" y="0" width="720" height="1280" fill="#030a18"/>
+    </svg>
+
+    <div class="story-top">
+      <div class="story-bars" id="storyBars" aria-hidden="true"></div>
+      <div class="story-ctrl">
+        <span class="story-brand">GLOBAL CATAMARANS</span>
+        <div>
+          <button type="button" class="story-icon" id="soundBtn" aria-label="Turn narration off" aria-pressed="true"></button>
+          <button type="button" class="story-icon" id="storyClose" aria-label="Close story"><svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <img class="invite" id="inviteCard" alt="" hidden>
+    <p class="caption" id="caption" aria-live="polite"></p>
+
+    <div class="story-cover" id="storyCover" hidden>
+      <h2 id="coverTitle"></h2>
+      <p id="coverText"></p>
+      <button type="button" class="btn btn-cta" id="coverPlay">Play the story</button>
+    </div>
+
+    <div class="story-end" id="storyEnd" hidden>
+      <h2 id="endTitle"></h2>
+      <div class="share-main" id="shareMain">
+        <button type="button" class="pri" data-share="native" id="shareNative" hidden>Share…</button>
+        <button type="button" class="pri" data-share="whatsapp">WhatsApp</button>
+        <button type="button" data-share="image">Save invitation</button>
+      </div>
+      <p class="story-feedback" id="storyFeedback" role="status" aria-live="polite"></p>
+      <details class="more" id="shareMore">
+        <summary>More ways to share</summary>
+        <div class="share">
+          <button type="button" data-share="instagram">Instagram</button>
+          <button type="button" data-share="facebook">Facebook</button>
+          <button type="button" data-share="x">X</button>
+          <button type="button" data-share="linkedin">LinkedIn</button>
+          <button type="button" data-share="telegram">Telegram</button>
+          <button type="button" data-share="email">Email</button>
+          <button type="button" data-share="copy">Copy link</button>
+        </div>
+        <ul class="tips">
+          <li>In WhatsApp, send the link first, then attach the saved invitation as a picture.</li>
+          <li>Instagram and TikTok do not take links from websites. Tap Instagram: we save the invitation and copy the link, so you can add it with the Link sticker.</li>
+          <li>Whoever opens the link sees this same story and can build a boat of their own.</li>
+        </ul>
+      </details>
+      <a class="btn btn-cta" id="storyCta" target="_blank" rel="noopener"></a>
+      <div class="end-row">
+        <button type="button" id="replayBtn">Watch again</button>
+        <button type="button" id="anotherBtn">Another version</button>
+        <button type="button" id="storyDone">Back to my boat</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const C = PRICING_CONFIG;
+const $ = id => document.getElementById(id);
+const STEP_NAMES = ['Use','Crew','Size','Propulsion','Energy','Look','Summary'];
+const LAST = STEP_NAMES.length - 1;
+const PX_FT = 9.5;                       // piirroksen mittakaava: pikseliä per jalka
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const mobile = window.matchMedia('(max-width: 900px)');
+
+/* ---------- Tila ---------- */
+const INITIAL = { usage:'day', persons:C.persons.initial, budget:C.budget.initial, length:45, cabins:3, propulsion:'sailDiesel', energy:'basic', color:'white', name:'' };
+const state = Object.assign({}, INITIAL);
+const story = { names:[], invitees:[], place:'', theme:'warm', shared:false, pick:{ o:0, m:0, e:0, w:0 } };
+let step = 0;
+let shownL = state.length * PX_FT;       // parhaillaan piirretty pituus (animoituu)
+let tweenId = 0;
+
+/* ---------- Apurit ---------- */
+const nf = new Intl.NumberFormat('en-GB');
+const eur = n => '€' + nf.format(Math.round(n));
+const eurRange = (a,b) => a === b ? eur(a) : eur(a) + ' – ' + eur(b);
+const roundTo = (n,to) => Math.round(n / to) * to;
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const meters = len => C.lengths[len].meters + ' m';
+const cabinText = n => C.cabins[n].label + ' cabins';
+const addOn = o => (o.min || o.max) ? '+ ' + eurRange(o.min, o.max) : 'Included in base price';
+const lower = s => s.charAt(0).toLowerCase() + s.slice(1);
+
+function hexRgb(h){ h = h.replace('#',''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); return [0,2,4].map(i => parseInt(h.substr(i,2),16)); }
+function mix(a,b,t){ const A = hexRgb(a), B = hexRgb(b); return '#' + A.map((v,i) => Math.round(v + (B[i]-v)*t).toString(16).padStart(2,'0')).join(''); }
+function isDark(h){ const [r,g,b] = hexRgb(h); return (0.299*r + 0.587*g + 0.114*b) < 150; }
+
+/* ---------- Hinta ---------- */
+function calcPrice(s){
+  const base = C.lengths[s.length].basePrice, sp = C.basePriceSpread, mult = C.usage[s.usage].multiplier;
+  const lines = [];
+  const add = (label, lo, hi) => { if (lo || hi) lines.push({ label, lo, hi }); };
+  add('Hull and standard equipment, ' + s.length + ' ft', base*(1-sp), base*(1+sp));
+  if (mult !== 1) add('Equipment level: ' + lower(C.usage[s.usage].label), base*(mult-1)*(1-sp), base*(mult-1)*(1+sp));
+  add('Cabins: ' + cabinText(s.cabins), C.cabins[s.cabins].min, C.cabins[s.cabins].max);
+  add('Propulsion: ' + lower(C.propulsion[s.propulsion].label), C.propulsion[s.propulsion].min, C.propulsion[s.propulsion].max);
+  add('Energy: ' + C.energy[s.energy].label, C.energy[s.energy].min, C.energy[s.energy].max);
+  add('Hull colour: ' + lower(C.colors[s.color].label), C.colors[s.color].min, C.colors[s.color].max);
+  add('Gear for ' + s.persons + ' people', C.perPerson.min*s.persons, C.perPerson.max*s.persons);
+  const lo = lines.reduce((t,l) => t + l.lo, 0), hi = lines.reduce((t,l) => t + l.hi, 0);
+  return { low: roundTo(lo, C.roundTo), high: roundTo(hi, C.roundTo), lines };
+}
+function budgetStatus(p, budget){
+  if (p.high <= budget) return { key:'ok', label:'Within budget', note:'At least ' + eur(budget - p.high) + ' to spare' };
+  if (p.low <= budget)  return { key:'warn', label:'At the edge of your budget', note:'The top of the range is ' + eur(p.high - budget) + ' over' };
+  return { key:'over', label:'Over budget', note:'At least ' + eur(p.low - budget) + ' over. Try a shorter hull.' };
+}
+
+/* ---------- Suositus ---------- */
+function recommend(s){
+  const p = s.persons;
+  let cabins = Math.min(5, Math.max(2, Math.ceil(p / 2)));
+  if (s.usage === 'charter') cabins = Math.max(cabins, 3);
+  let length = p <= 4 ? 40 : p <= 6 ? 45 : p <= 8 ? 50 : p <= 10 ? 55 : 60;
+  if (s.usage === 'ocean' || s.usage === 'liveaboard') length = Math.max(length, 45);
+  length = Math.max(length, C.cabins[cabins].minLength);
+  let energy = { day:'none', charter:'basic', ocean:'offgrid', liveaboard:'offgrid' }[s.usage];
+  if (C.propulsion[s.propulsion].electric) energy = 'offgrid';
+  return { length, cabins, energy };
+}
+const maxCabinsFor = len => Math.max(...Object.keys(C.cabins).map(Number).filter(n => C.cabins[n].minLength <= len));
+
+/* ==========================================================================
+   VENEEN PIIRTO (SVG) – sivuprofiili, keula oikealle
+   L = pituus pikseleinä, s = valinnat
+   fx = lisäasetukset: mitkä osat ponnahtavat esiin, sekä tarinaa varten
+        id (tunnisteiden etuliite), sailsDown (purjeet alhaalla), night (yö),
+        underway (vana), lightsOnly (palauta vain valot)
+   ========================================================================== */
+const TOPS  = ['#dcc08c','#2aa6a1','#f2f5f6','#e07a5f','#7fb8d6','#f0e0b8','#c8553d','#9fd8cf','#ffffff','#e9b872','#5b8fb9','#f4c7ab'];
+const SKINS = ['#f0c9a4','#d7a377','#b98056','#e8b98f','#8d5b3d'];
+const SLOTS = [
+  {f:.80,z:'deck'},{f:.20,z:'pit'},{f:.88,z:'deck'},{f:.26,z:'pit'},{f:.73,z:'deck'},{f:.145,z:'pit'},
+  {f:.925,z:'sit'},{f:.60,z:'deck'},{f:.40,z:'deck'},{f:.665,z:'deck'},{f:.335,z:'deck'},{f:.47,z:'deck'}
+];
+
+function person(x, foot, i, sit, pop){
+  const top = TOPS[i % TOPS.length], skin = SKINS[(i*7+3) % SKINS.length];
+  const a = pop ? ' class="pop" style="animation-delay:' + (pop-1)*70 + 'ms"' : '';
+  const n = v => v.toFixed(1);
+  if (sit) return '<g' + a + '><rect x="' + n(x-5.5) + '" y="' + n(foot-24) + '" width="11" height="18" rx="5" fill="' + top + '"/>'
+    + '<rect x="' + n(x-3) + '" y="' + n(foot-8) + '" width="20" height="6.5" rx="3.2" fill="#14304d"/>'
+    + '<circle cx="' + n(x) + '" cy="' + n(foot-29.5) + '" r="5" fill="' + skin + '"/></g>';
+  const h = 45 + ((i*5) % 4) * 2, y = foot - h;
+  return '<g' + a + '><rect x="' + n(x-4.7) + '" y="' + n(foot-21) + '" width="4.1" height="21" rx="2" fill="#14304d"/>'
+    + '<rect x="' + n(x+.6) + '" y="' + n(foot-21) + '" width="4.1" height="21" rx="2" fill="#14304d"/>'
+    + (i === 0 ? '<path d="M' + n(x+4.5) + ',' + n(y+14) + 'L' + n(x+11.5) + ',' + n(y+2.5) + '" stroke="' + top + '" stroke-width="3.6" stroke-linecap="round"/>' : '')
+    + '<rect x="' + n(x-6) + '" y="' + n(y+11) + '" width="12" height="' + n(h-30) + '" rx="5" fill="' + top + '"/>'
+    + '<circle cx="' + n(x) + '" cy="' + n(y+5.2) + '" r="5.2" fill="' + skin + '"/></g>';
+}
+
+function solarRow(xa, xb, y, count, pop, offset, id){
+  let o = '<rect x="' + xa.toFixed(1) + '" y="' + (y-10).toFixed(1) + '" width="' + (xb-xa).toFixed(1) + '" height="10" rx="1.5" fill="#e3eaee"/>';
+  const w = (xb - xa - 4) / count;
+  for (let i = 0; i < count; i++){
+    const a = xa + 2 + i*w + 1, pw = w - 2;
+    o += '<g' + (pop ? ' class="pop" style="animation-delay:' + (offset+i)*55 + 'ms"' : '') + '>'
+      + '<rect x="' + a.toFixed(1) + '" y="' + (y-9.2).toFixed(1) + '" width="' + pw.toFixed(1) + '" height="8.4" rx="1" fill="url(#' + id + 'Pv)" stroke="#9cc3ea" stroke-width=".5"/>'
+      + '<path d="M' + (a+pw/3).toFixed(1) + ',' + (y-9.2).toFixed(1) + 'v8.4M' + (a+2*pw/3).toFixed(1) + ',' + (y-9.2).toFixed(1) + 'v8.4M' + a.toFixed(1) + ',' + (y-5).toFixed(1) + 'h' + pw.toFixed(1) + '" stroke="#9cc3ea" stroke-width=".4" opacity=".7" fill="none"/></g>';
+  }
+  return o;
+}
+
+function boatSVG(L, s, fx){
+  fx = fx || {};
+  const id = fx.id || 'b', P = C.propulsion[s.propulsion], rig = P.sails;
+  const W = 540, x0 = 500 - L/2, ft = L / PX_FT;
+  const X = f => x0 + L*f, n = v => v.toFixed(1);
+  const fb = 46 + (ft-40)*.8, deck = W - fb, st = fb/3;          // varalaita ja kansi
+  const sheer = f => deck - 6*Math.pow(Math.max(0,(f-.064)/.91), 2);
+  const ch = 36 + (ft-40)*.3, roofY = deck - ch - 2;             // salonki
+  const ht = 58 + (ft-40)*.35, topY = deck - ht;                 // kovakatto
+  const xm = X(.5), mh = L*.74, mastTop = roofY - mh, boomY = topY - 15;
+  const hex = C.colors[s.color].hex, dark = isDark(hex);
+  const stripe = dark ? '#f2f5f6' : '#b8925a';
+  const glass = 'url(#' + id + 'Glass)', WARM = '#ffe09a';
+  let o = '', lights = '';
+
+  o += '<defs>'
+    + '<linearGradient id="' + id + 'Hull" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + mix(hex,'#ffffff',.22) + '"/><stop offset=".45" stop-color="' + hex + '"/><stop offset="1" stop-color="' + mix(hex,'#04121f',.3) + '"/></linearGradient>'
+    + '<linearGradient id="' + id + 'Sail" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d4e0e6"/></linearGradient>'
+    + '<linearGradient id="' + id + 'Roof" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9e2e7"/></linearGradient>'
+    + '<linearGradient id="' + id + 'Glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b4a6b"/><stop offset=".5" stop-color="#0a2238"/><stop offset="1" stop-color="#123a57"/></linearGradient>'
+    + '<linearGradient id="' + id + 'Pv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2b5cb0"/><stop offset="1" stop-color="#122a66"/></linearGradient>'
+    + '</defs>';
+
+  /* Purjeet (vain jos veneessä on takila) */
+  if (rig){
+    const jHead = [xm+3, mastTop + mh*.13], jTack = [X(.955), sheer(.955)-7], jClew = [xm + L*.07, roofY-12];
+    if (!fx.sailsDown){
+      const tack = [xm-2, boomY-4], head = [xm-2, mastTop+8], sq = [xm - L*.075, mastTop+15], clew = [X(.165), boomY-3];
+      const ctl = [(sq[0]+clew[0])/2 - L*.035, (sq[1]+clew[1])/2 - 6];
+      o += '<path d="M' + n(tack[0]) + ',' + n(tack[1]) + 'L' + n(head[0]) + ',' + n(head[1]) + 'L' + n(sq[0]) + ',' + n(sq[1]) + 'Q' + n(ctl[0]) + ',' + n(ctl[1]) + ' ' + n(clew[0]) + ',' + n(clew[1]) + 'Z" fill="url(#' + id + 'Sail)" opacity=".97"/>';
+      for (let i = 1; i <= 4; i++){
+        const t = i/5, bx = (1-t)*(1-t)*sq[0] + 2*(1-t)*t*ctl[0] + t*t*clew[0], by = (1-t)*(1-t)*sq[1] + 2*(1-t)*t*ctl[1] + t*t*clew[1];
+        o += '<path d="M' + n(xm-2) + ',' + n(by-10) + 'L' + n(bx) + ',' + n(by) + '" stroke="#9fb3bf" stroke-width=".8" opacity=".6"/>';
+      }
+      o += '<path d="M' + n(jHead[0]) + ',' + n(jHead[1]) + 'L' + n(jTack[0]) + ',' + n(jTack[1]) + 'Q' + n((jTack[0]+jClew[0])/2) + ',' + n(jClew[1]+10) + ' ' + n(jClew[0]) + ',' + n(jClew[1])
+        + 'Q' + n(jClew[0]+L*.03) + ',' + n((jHead[1]+jClew[1])/2) + ' ' + n(jHead[0]) + ',' + n(jHead[1]) + 'Z" fill="url(#' + id + 'Sail)" opacity=".92"/>';
+    } else {
+      o += '<rect x="' + n(X(.175)) + '" y="' + n(boomY-10) + '" width="' + n(xm - X(.175) - 4) + '" height="9" rx="4.5" fill="#dbe4ea"/>'
+        + '<path d="M' + n(jHead[0]) + ',' + n(jHead[1]) + 'L' + n(jTack[0]) + ',' + n(jTack[1]) + '" stroke="#e9eff3" stroke-width="3.6" stroke-linecap="round"/>';
+    }
+    o += '<path d="M' + n(xm+1) + ',' + n(mastTop + mh*.1) + 'L' + n(X(.96)) + ',' + n(sheer(.96)-4) + 'M' + n(xm) + ',' + n(mastTop + mh*.3) + 'L' + n(X(.435)) + ',' + n(deck) + '" stroke="#dfe8ed" stroke-width=".8" opacity=".55" fill="none"/>';
+  }
+
+  /* Avotilan väki (jää kovakaton alle ja rungon taakse) */
+  let pitPeople = '', deckPeople = '';
+  for (let i = 0; i < s.persons && i < SLOTS.length; i++){
+    const sl = SLOTS[i], pop = (fx.people != null && i >= fx.people) ? (i - fx.people + 1) : 0;
+    if (sl.z === 'pit') pitPeople += person(X(sl.f), deck + 12, i, false, pop);
+    else deckPeople += person(X(sl.f), sheer(sl.f) - 1, i, sl.z === 'sit', pop);
+  }
+  o += pitPeople;
+
+  /* Salonki, ohjaamon suoja ja kovakatto */
+  const xa = X(.31), xb = X(.67), wb = deck - ch*.24, wt = roofY + ch*.2;
+  const saloonGlass = 'M' + n(xa + L*.03) + ',' + n(wb) + 'L' + n(xa + L*.036) + ',' + n(wt) + 'L' + n(xb - L*.105) + ',' + n(wt) + 'L' + n(xb - L*.04) + ',' + n(wb) + 'Z';
+  o += '<path d="M' + n(xa) + ',' + n(deck) + 'L' + n(xa + L*.012) + ',' + n(roofY+4) + 'Q' + n(xa + L*.014) + ',' + n(roofY) + ' ' + n(xa + L*.03) + ',' + n(roofY)
+    + 'L' + n(xb - L*.1) + ',' + n(roofY) + 'Q' + n(xb - L*.075) + ',' + n(roofY+1) + ' ' + n(xb) + ',' + n(deck-1) + 'Z" fill="url(#' + id + 'Roof)"/>';
+  o += '<path d="' + saloonGlass + '" fill="' + glass + '"/>';
+  o += '<path d="M' + n(xa + L*.14) + ',' + n(wt) + 'V' + n(wb) + 'M' + n(xa + L*.235) + ',' + n(wt) + 'V' + n(wb) + '" stroke="#eef3f6" stroke-width="1.6"/>';
+  o += '<path d="M' + n(xa + L*.05) + ',' + n(wt+3) + 'L' + n(xa + L*.11) + ',' + n(wt+3) + '" stroke="#fff" stroke-width="1" opacity=".35"/>';
+  lights += '<path d="' + saloonGlass + '" fill="' + WARM + '" opacity=".92"/><path d="M' + n(xa + L*.14) + ',' + n(wt) + 'V' + n(wb) + 'M' + n(xa + L*.235) + ',' + n(wt) + 'V' + n(wb) + '" stroke="#55606b" stroke-width="1.6"/>';
+  o += '<path d="M' + n(X(.335)) + ',' + n(topY+5) + 'L' + n(X(.40)) + ',' + n(topY+5) + 'L' + n(X(.435)) + ',' + n(roofY) + 'L' + n(X(.335)) + ',' + n(roofY) + 'Z" fill="#e9eff2"/>';
+  o += '<path d="M' + n(X(.122)) + ',' + n(deck) + 'L' + n(X(.127)) + ',' + n(topY+5) + '" stroke="#e9eff2" stroke-width="2.6"/>';
+  o += '<rect x="' + n(X(.105)) + '" y="' + n(topY) + '" width="' + n(L*.30) + '" height="5.5" rx="2.7" fill="#f6f9fa"/>';
+  const led = '<path d="M' + n(X(.135)) + ',' + n(topY+7) + 'H' + n(X(.325)) + '" stroke="#7ff0e2" stroke-width="3.2" opacity=".28" stroke-linecap="round"/>'
+    + '<path d="M' + n(X(.135)) + ',' + n(topY+7) + 'H' + n(X(.325)) + '" stroke="#bafcf3" stroke-width="1.1" stroke-linecap="round"/>';
+  if (s.energy === 'offgrid') o += led;
+  lights += led;
+
+  /* Aurinkopaneelit */
+  if (s.energy === 'basic') o += solarRow(X(.15), X(.33), topY, 3, fx.energy, 0, id);
+  if (s.energy === 'offgrid') o += solarRow(X(.115), X(.395), topY, 6, fx.energy, 0, id) + solarRow(X(.515), X(.585), roofY, 2, fx.energy, 6, id);
+
+  if (rig){
+    /* Masto ja puomi */
+    o += '<rect x="' + n(xm-2.4) + '" y="' + n(mastTop) + '" width="4.8" height="' + n(mh+2) + '" rx="1.6" fill="#eef2f5"/>'
+      + '<rect x="' + n(xm+.6) + '" y="' + n(mastTop) + '" width="1.8" height="' + n(mh+2) + '" fill="#c3d0d8"/>'
+      + '<path d="M' + n(xm) + ',' + n(boomY) + 'L' + n(X(.15)) + ',' + n(boomY+2) + '" stroke="#eef2f5" stroke-width="4.6" stroke-linecap="round"/>'
+      + '<path d="M' + n(xm) + ',' + n(mastTop) + 'v-9m-5,2h10" stroke="#eef2f5" stroke-width="1" fill="none"/>'
+      + '<circle cx="' + n(xm) + '" cy="' + n(mastTop-10) + '" r="1.5" fill="#f6e6bd"/>';
+    lights += '<circle cx="' + n(xm) + '" cy="' + n(mastTop-10) + '" r="7" fill="#fff3c9" opacity=".3"/><circle cx="' + n(xm) + '" cy="' + n(mastTop-10) + '" r="2.4" fill="#fff8de"/>';
+    if (s.usage === 'ocean') o += '<g' + (fx.usage ? ' class="pop"' : '') + '><path d="M' + n(xm+2) + ',' + n(mastTop + mh*.46) + 'h9" stroke="#eef2f5" stroke-width="2"/><ellipse cx="' + n(xm+14) + '" cy="' + n(mastTop + mh*.46 - 3) + '" rx="8" ry="3.6" fill="#f6f9fa"/></g>';
+  } else {
+    /* Moottorikatamaraani: antennikaari ja merkkimasto purjeiden tilalla */
+    const ay = topY - 26;
+    o += '<path d="M' + n(X(.118)) + ',' + n(topY) + 'L' + n(X(.145)) + ',' + n(ay) + 'H' + n(X(.215)) + 'L' + n(X(.242)) + ',' + n(topY) + '" stroke="#eef2f5" stroke-width="3.6" fill="none" stroke-linejoin="round" stroke-linecap="round"/>'
+      + '<path d="M' + n(X(.16)) + ',' + n(ay) + 'v-26M' + n(X(.2)) + ',' + n(ay) + 'v-15" stroke="#eef2f5" stroke-width="1.1"/>'
+      + '<circle cx="' + n(X(.16)) + '" cy="' + n(ay-27) + '" r="1.6" fill="#f6e6bd"/>'
+      + '<path d="M' + n(X(.42)) + ',' + n(roofY) + 'v-30m-5,6h10" stroke="#eef2f5" stroke-width="1.6" fill="none"/>';
+    lights += '<circle cx="' + n(X(.16)) + '" cy="' + n(ay-27) + '" r="7" fill="#fff3c9" opacity=".3"/><circle cx="' + n(X(.16)) + '" cy="' + n(ay-27) + '" r="2.4" fill="#fff8de"/>';
+    if (s.usage === 'ocean') o += '<ellipse' + (fx.usage ? ' class="pop"' : '') + ' cx="' + n(X(.18)) + '" cy="' + n(ay-5) + '" rx="9" ry="4" fill="#f6f9fa"/>';
+  }
+
+  /* Köli ja peräsin (näkyvät veden läpi) */
+  o += '<path d="M' + n(X(.44)) + ',' + (W+13) + 'L' + n(X(.47)) + ',' + (W+27) + 'L' + n(X(.6)) + ',' + (W+27) + 'L' + n(X(.63)) + ',' + (W+13) + 'ZM' + n(X(.075)) + ',' + (W+12) + 'L' + n(X(.07)) + ',' + (W+30) + 'L' + n(X(.1)) + ',' + (W+30) + 'L' + n(X(.11)) + ',' + (W+12) + 'Z" fill="' + mix(hex,'#04121f',.5) + '"/>';
+
+  /* Runko */
+  let hull = 'M' + n(X(0)) + ',' + (W+8) + 'L' + n(X(0)) + ',' + n(W-st) + 'L' + n(X(.032)) + ',' + n(W-st) + 'L' + n(X(.032)) + ',' + n(W-2*st) + 'L' + n(X(.064)) + ',' + n(W-2*st);
+  const SH = [.064,.2,.35,.5,.65,.8,.9,.975];
+  SH.forEach(f => { hull += 'L' + n(X(f)) + ',' + n(sheer(f)); });
+  hull += 'L' + n(X(1)) + ',' + (W-1) + 'Q' + n(X(1)) + ',' + (W+13) + ' ' + n(X(.93)) + ',' + (W+14) + 'L' + n(X(.08)) + ',' + (W+14) + 'Q' + n(X(0)) + ',' + (W+14) + ' ' + n(X(0)) + ',' + (W+8) + 'Z';
+  o += '<path d="' + hull + '" fill="url(#' + id + 'Hull)"/>';
+  o += '<path d="M' + SH.map(f => n(X(f)) + ',' + n(sheer(f)+.8)).join('L') + '" stroke="#b58a56" stroke-width="2" fill="none"/>';                               // tiikkikansi
+  o += '<path d="M' + n(X(0)) + ',' + n(W-st+.8) + 'H' + n(X(.032)) + 'M' + n(X(.032)) + ',' + n(W-2*st+.8) + 'H' + n(X(.064)) + '" stroke="#b58a56" stroke-width="2"/>';
+  o += '<path d="M' + n(X(.002)) + ',' + (W-5.5) + 'H' + n(X(.996)) + '" stroke="' + stripe + '" stroke-width="2.2"/>';                                           // vesilinjaraita
+  o += '<path d="M' + n(X(.075)) + ',' + n(deck + fb*.2) + 'L' + n(X(.975)) + ',' + n(sheer(.975) + fb*.2) + '" stroke="' + (dark ? '#ffffff' : '#0b2a47') + '" stroke-width=".8" opacity=".14"/>';
+
+  /* Hyttien ikkunat */
+  const wn = s.cabins, r0 = X(.2), r1 = X(.9), slot = (r1-r0)/wn, ww = Math.min(L*.095, slot*.62), wh = fb*.2, wy = deck + fb*.32;
+  for (let i = 0; i < wn; i++){
+    const wx = r0 + slot*(i+.5) - ww/2;
+    const rect = 'x="' + n(wx) + '" y="' + n(wy) + '" width="' + n(ww) + '" height="' + n(wh) + '" rx="' + n(wh*.35) + '"';
+    o += '<g' + (fx.cabins != null && i >= fx.cabins ? ' class="pop"' : '') + '><rect ' + rect + ' fill="' + glass + '" stroke="' + (dark ? 'rgba(255,255,255,.4)' : 'rgba(11,42,71,.25)') + '" stroke-width=".8"/>'
+      + '<path d="M' + n(wx + ww*.12) + ',' + n(wy + wh*.3) + 'h' + n(ww*.3) + '" stroke="#fff" stroke-width=".9" opacity=".4" stroke-linecap="round"/></g>';
+    if (i % 2 === 0 || wn < 3) lights += '<rect ' + rect + ' fill="' + WARM + '"/>';
+  }
+
+  /* Voimanlähteen merkki: salama (sähkö) tai pakoputki (diesel) */
+  if (P.electric) o += '<path' + (fx.propulsion ? ' class="pop"' : '') + ' transform="translate(' + n(X(.94)) + ',' + n(sheer(.94) + fb*.3) + ')" d="M2,0L-5,9H-.5L-2.5,17L5.5,7H1Z" fill="' + (dark ? '#8ff3e6' : '#1f9c97') + '"/>';
+  else o += '<ellipse cx="' + n(X(.082)) + '" cy="' + n(W-11) + '" rx="2.6" ry="1.7" fill="#1c2833" opacity=".75"/>';
+
+  /* Nimi rungossa */
+  if (s.name.trim()) o += '<text x="' + n(X(.115)) + '" y="' + n(W - fb*.2) + '" font-family="Iowan Old Style,Palatino Linotype,Palatino,Georgia,serif" font-style="italic" font-size="' + n(Math.max(10, fb*.21)) + '" letter-spacing=".6" fill="' + (dark ? '#f2f5f6' : '#0b2a47') + '">' + esc(s.name.trim()) + '</text>';
+
+  /* Kannella oleva väki */
+  o += deckPeople;
+
+  /* Kaiteet ja keulapuomi */
+  let rail = '';
+  const posts = Math.round(L/42);
+  for (let i = 0; i <= posts; i++){ const f = .10 + (.855*i/posts); rail += 'M' + n(X(f)) + ',' + n(sheer(f)) + 'v-19'; }
+  rail += 'M' + n(X(.10)) + ',' + n(sheer(.10)-19) + 'L' + SH.slice(1).map(f => n(X(Math.min(f,.955))) + ',' + n(sheer(Math.min(f,.955))-19)).join('L')
+        + 'M' + n(X(.10)) + ',' + n(sheer(.10)-10) + 'L' + SH.slice(1).map(f => n(X(Math.min(f,.955))) + ',' + n(sheer(Math.min(f,.955))-10)).join('L');
+  o += '<path d="' + rail + '" stroke="#e6edf1" stroke-width="1.1" fill="none" opacity=".9"/>';
+  if (rig) o += '<path d="M' + n(X(.95)) + ',' + n(sheer(.95)-2) + 'L' + n(X(1.045)) + ',' + n(sheer(.975)-5) + '" stroke="#e6edf1" stroke-width="3" stroke-linecap="round"/>';
+
+  /* Viiri perässä */
+  const px = X(.105), py = topY;
+  o += '<path d="M' + n(px) + ',' + n(py) + 'l-5,-27" stroke="#e6edf1" stroke-width="1.3"/>'
+    + '<path d="M' + n(px-5) + ',' + n(py-27) + 'L' + n(px-27) + ',' + n(py-22.5) + 'L' + n(px-3.6) + ',' + n(py-17) + 'Z" fill="#dcc08c"/>';
+
+  /* Käyttötarkoituksen lisävarusteet */
+  const popU = fx.usage ? ' class="pop"' : '';
+  if (s.usage === 'ocean' || s.usage === 'liveaboard'){               // jolla taaveteissa
+    const dw = Math.max(46, L*.105), dx = X(.068) - dw, dy = deck - 20;
+    o += '<g' + popU + '><path d="M' + n(X(.09)) + ',' + n(deck-2) + 'Q' + n(X(.085)) + ',' + n(deck-34) + ' ' + n(dx + dw*.2) + ',' + n(deck-36) + '" stroke="#dfe7ec" stroke-width="2.6" fill="none"/>'
+      + '<path d="M' + n(dx + dw*.25) + ',' + n(deck-36) + 'V' + n(dy) + 'M' + n(dx + dw*.8) + ',' + n(deck-33) + 'V' + n(dy) + '" stroke="#dfe7ec" stroke-width=".9"/>'
+      + '<rect x="' + n(dx) + '" y="' + n(dy) + '" width="' + n(dw) + '" height="10" rx="5" fill="#8f9ca6"/><rect x="' + n(dx+4) + '" y="' + n(dy+6.5) + '" width="' + n(dw-10) + '" height="5" rx="2.5" fill="#56636e"/>'
+      + '<rect x="' + n(dx-4) + '" y="' + n(dy-2) + '" width="5" height="12" rx="1.5" fill="#22303c"/></g>';
+  }
+  if (s.usage === 'ocean'){                                            // tuuligeneraattori
+    const gx = X(.05), gy = topY - 50;
+    o += '<g' + popU + '><path d="M' + n(gx) + ',' + n(deck-2) + 'V' + n(gy) + '" stroke="#dfe7ec" stroke-width="1.8"/><circle cx="' + n(gx) + '" cy="' + n(gy) + '" r="2.6" fill="#f6f9fa"/>'
+      + '<path d="M' + n(gx) + ',' + n(gy) + 'l0,-13M' + n(gx) + ',' + n(gy) + 'l11,7M' + n(gx) + ',' + n(gy) + 'l-11,7" stroke="#f6f9fa" stroke-width="1.6" stroke-linecap="round"/></g>';
+  }
+  if (s.usage === 'liveaboard'){                                       // satelliittiantenni
+    const sx = X(.36);
+    o += '<g' + popU + '><path d="M' + n(sx) + ',' + n(topY) + 'v-9" stroke="#dfe7ec" stroke-width="1.6"/><rect x="' + n(sx-9) + '" y="' + n(topY-13) + '" width="18" height="4" rx="1.5" fill="#f6f9fa" transform="rotate(-12 ' + n(sx) + ' ' + n(topY-11) + ')"/></g>';
+  }
+  if (s.usage === 'charter'){                                          // SUP-laudat ja pelastusrengas
+    o += '<g' + popU + '><rect x="' + n(X(.705)) + '" y="' + n(sheer(.78)-15) + '" width="' + n(L*.15) + '" height="5.5" rx="2.7" fill="#2aa6a1" transform="rotate(-.6 ' + n(X(.78)) + ' ' + n(sheer(.78)) + ')"/>'
+      + '<rect x="' + n(X(.72)) + '" y="' + n(sheer(.78)-8.5) + '" width="' + n(L*.14) + '" height="5.5" rx="2.7" fill="#dcc08c"/>'
+      + '<circle cx="' + n(X(.30)) + '" cy="' + n(deck-12) + '" r="5.2" fill="none" stroke="#e8674f" stroke-width="3"/></g>';
+  }
+
+  /* Vana ja keula-aalto, kun vene on liikkeessä (tarina) */
+  if (fx.underway){
+    o += '<path d="M' + n(X(.03)) + ',' + (W+3) + 'q' + n(-L*.05) + ',-15 ' + n(-L*.12) + ',-7q' + n(-L*.06) + ',-9 ' + n(-L*.13) + ',-1q' + n(-L*.05) + ',-5 ' + n(-L*.1) + ',3v5H' + n(X(.03)) + 'Z" fill="#fff" opacity=".8"/>'
+      + '<path d="M' + n(X(1.005)) + ',' + (W+2) + 'q-5,-12 -24,-9q9,3 11,9Z" fill="#fff" opacity=".8"/>';
+  }
+  return fx.lightsOnly ? lights : o;
+}
+
+function renderBoat(fx){ $('boat').innerHTML = boatSVG(shownL, state, fx); }
+
+function tweenLength(){
+  const target = state.length * PX_FT;
+  cancelAnimationFrame(tweenId);
+  if (reduceMotion.matches || Math.abs(target - shownL) < .5){ shownL = target; renderBoat(); return; }
+  const from = shownL, t0 = performance.now(), dur = 520;
+  const tick = now => {
+    const t = Math.min(1, (now - t0)/dur), e = 1 - Math.pow(1-t, 3);
+    shownL = from + (target - from)*e;
+    renderBoat();
+    if (t < 1) tweenId = requestAnimationFrame(tick);
+  };
+  tweenId = requestAnimationFrame(tick);
+}
+
+/* ---------- Meri ja kuvan rajaus ---------- */
+function wave(y, amp, per, from, to){ let d = 'M' + from + ',' + y; for (let x = from; x < to; x += per) d += 'q' + per/4 + ',' + (-amp) + ' ' + per/2 + ',0t' + per/2 + ',0'; return d; }
+$('waveFront').setAttribute('d', wave(541, 2.6, 120, -2040, 3240) + 'V3100H-2040Z');
+$('waveLine1').setAttribute('d', wave(541, 2.6, 120, -2040, 3240));
+$('waveLine2').setAttribute('d', wave(566, 2, 120, -2000, 3240) + wave(602, 2.4, 120, -2060, 3240) + wave(655, 3, 120, -2010, 3240));
+$('waveBack').setAttribute('d', wave(545, 1.4, 120, -2020, 3240));
+
+function fitScene(){
+  const st = $('stage'), w = st.clientWidth, h = st.clientHeight;
+  if (!w || !h) return;
+  const hudH = mobile.matches ? 0 : $('hud').offsetHeight + 36;
+  const ABOVE = 588, BELOW = 92, usable = Math.max(120, h - hudH);
+  const u = Math.max(700 / w, (ABOVE + BELOW) / usable);          // kuvayksikköä per pikseli
+  const extra = usable*u - (ABOVE + BELOW);
+  const y0 = 540 - ABOVE - extra*.62;
+  $('scene').setAttribute('viewBox', (500 - w*u/2).toFixed(1) + ' ' + y0.toFixed(1) + ' ' + (w*u).toFixed(1) + ' ' + (h*u).toFixed(1));
+}
+
+/* ==========================================================================
+   LOMAKKEEN RAKENTAMINEN (tekstit ja hinnat tulevat PRICING_CONFIGista)
+   ========================================================================== */
+const ICONS = {
+  day:'<svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.5"/><path d="M12 2.5v1.5M5.5 9H4M20 9h-1.5M7.2 4.6l1 1M16.8 4.6l-1 1M3 17c2-1.6 4-1.6 6 0s4 1.6 6 0 4-1.6 6 0M5 21c1.6-1.2 3.2-1.2 4.8 0s3.2 1.2 4.8 0 3.2-1.2 4.8 0"/></svg>',
+  ocean:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/><path d="M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21"/></svg>',
+  charter:'<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.5 19c.6-3.4 2.8-5 5.5-5s4.9 1.6 5.5 5M14 14.3c.8-.4 1.6-.6 2.5-.6 2.4 0 4.3 1.4 5 4.3"/></svg>',
+  liveaboard:'<svg viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5M6.5 9.5V16h11V9.5M10.5 16v-4h3v4"/><path d="M3 20c2-1.4 4-1.4 6 0s4 1.4 6 0 4-1.4 6 0"/></svg>',
+  none:'<svg viewBox="0 0 24 24"><rect x="3" y="8" width="16" height="9" rx="1.5"/><path d="M19 11h2v3h-2M7 11v3"/></svg>',
+  basic:'<svg viewBox="0 0 24 24"><path d="M5 20l2.5-10h9L19 20zM6.2 15h11.6M12 10v10"/><circle cx="12" cy="4.5" r="1.8"/><path d="M12 1v.6M8.6 4.5H8M16 4.5h-.6"/></svg>',
+  offgrid:'<svg viewBox="0 0 24 24"><path d="M2.5 20L5 11h8l2.5 9zM3.7 15.5h10.6M9 11v9"/><path d="M19.5 3l-3 5h3l-1 5 3.5-6h-3z"/></svg>',
+  sailDiesel:'<svg viewBox="0 0 24 24"><path d="M11 3v13H4zM13 7v9h6z"/><path d="M3 20c2-1.4 4-1.4 6 0s4 1.4 6 0 4-1.4 6 0"/></svg>',
+  sailElectric:'<svg viewBox="0 0 24 24"><path d="M10 3v13H3zM12 9v7h5"/><path d="M19.5 2l-3 5h3l-1 5 3.5-6h-3z"/><path d="M3 20c2-1.4 4-1.4 6 0s4 1.4 6 0 4-1.4 6 0"/></svg>',
+  diesel:'<svg viewBox="0 0 24 24"><path d="M3 15h18l-2.5 4h-13zM7 15v-4h8l3 4M10 11V8h3"/><path d="M4 22c1.8-1 3.5-1 5.3 0s3.6 1 5.4 0 3.5-1 5.3 0"/></svg>',
+  electric:'<svg viewBox="0 0 24 24"><path d="M3 15h18l-2.5 4h-13zM7 15v-4h6l3 4"/><path d="M19.5 2l-3 5h3l-1 5 3.5-6h-3z"/><path d="M4 22c1.8-1 3.5-1 5.3 0s3.6 1 5.4 0 3.5-1 5.3 0"/></svg>'
+};
+const SOUND_ON = '<svg viewBox="0 0 20 20"><path d="M3 8v4h3l4 3.5v-11L6 8zM13 7.5c1 .7 1.5 1.5 1.5 2.5s-.5 1.8-1.5 2.5M15 5c1.8 1.3 2.7 3 2.7 5s-.9 3.7-2.7 5"/></svg>';
+const SOUND_OFF = '<svg viewBox="0 0 20 20"><path d="M3 8v4h3l4 3.5v-11L6 8zM13.5 8l4 4M17.5 8l-4 4"/></svg>';
+
+function optRow(name, key, item, price, recKey){
+  return '<label class="opt"><input class="sr" type="radio" name="' + name + '" value="' + key + '"><span class="opt-body">' + ICONS[key]
+    + '<span><span class="opt-title">' + esc(item.label) + (recKey ? '<em class="tag" data-rec="' + recKey + ':' + key + '" hidden>Recommended</em>' : '') + '</span><span class="opt-text">' + esc(item.text) + '</span></span>'
+    + '<span class="opt-price">' + price + '</span></span></label>';
+}
+
+function buildForm(){
+  $('usageOpts').innerHTML = Object.keys(C.usage).map(k => { const pct = Math.round((C.usage[k].multiplier-1)*100);
+    return optRow('usage', k, C.usage[k], pct ? '+ ' + pct + '% on base price' : 'Standard equipment'); }).join('');
+  $('propOpts').innerHTML = Object.keys(C.propulsion).map(k => optRow('propulsion', k, C.propulsion[k], addOn(C.propulsion[k]))).join('');
+  $('energyOpts').innerHTML = Object.keys(C.energy).map(k => optRow('energy', k, C.energy[k], addOn(C.energy[k]), 'energy')).join('');
+
+  $('lengthOpts').innerHTML = Object.keys(C.lengths).map(k =>
+    '<label class="cell"><input class="sr" type="radio" name="length" value="' + k + '"><span class="cell-body"><span class="cell-big">' + k + '</span><span class="cell-unit">ft / ' + meters(k) + '</span></span>'
+    + '<em class="tag" data-rec="length:' + k + '" hidden>Recommended</em></label>').join('');
+
+  $('cabinOpts').innerHTML = Object.keys(C.cabins).map(k =>
+    '<label class="cell"><input class="sr" type="radio" name="cabins" value="' + k + '"><span class="cell-body"><span class="cell-big">' + C.cabins[k].label + '</span><span class="cell-unit">' + (C.cabins[k].min || C.cabins[k].max ? '+ €' + nf.format(C.cabins[k].min/1000) + '–' + nf.format(C.cabins[k].max/1000) + 'k' : 'standard') + '</span></span>'
+    + '<em class="tag" data-rec="cabins:' + k + '" hidden>Recommended</em></label>').join('');
+
+  $('colorOpts').innerHTML = Object.keys(C.colors).map(k => { const c = C.colors[k];
+    return '<label class="swatch"><input class="sr" type="radio" name="color" value="' + k + '"><span class="swatch-body">'
+      + '<svg viewBox="0 0 64 26" aria-hidden="true"><path d="M2,6H8V10H14V4L60,2L62,22Q62,25 56,25H8Q2,25 2,20Z" fill="' + c.hex + '" stroke="#8a99a5" stroke-width=".8"/><path d="M3,21H61" stroke="' + (isDark(c.hex) ? '#f2f5f6' : '#b8925a') + '" stroke-width="1.6"/></svg>'
+      + '<span class="swatch-name">' + esc(c.label) + '</span><span class="swatch-price">' + addOn(c) + '</span></span></label>'; }).join('');
+
+  const b = $('budget'); b.min = C.budget.min; b.max = C.budget.max; b.step = C.budget.step;
+  $('budgetMin').textContent = eur(C.budget.min); $('budgetMax').textContent = eur(C.budget.max);
+  $('crewDots').innerHTML = new Array(C.persons.max).fill('<i></i>').join('');
+
+  const ol = $('steps');
+  STEP_NAMES.forEach((name, i) => { const li = document.createElement('li');
+    li.innerHTML = '<button type="button" data-goto="' + i + '"><span class="n">' + (i+1) + '</span><span>' + name + '</span></button>'; ol.appendChild(li); });
+
+  ['cta','storyCta'].forEach(id => { $(id).href = C.cta.url; $(id).textContent = C.cta.text; });
+  $('disclaimer').textContent = C.disclaimer;
+  $('soundBtn').innerHTML = SOUND_ON;
+}
+
+/* ---------- Näkymän päivitys ---------- */
+function syncInputs(){
+  ['usage','propulsion','energy','length','cabins','color'].forEach(name => {
+    document.querySelectorAll('input[name="' + name + '"]').forEach(el => { el.checked = String(state[name]) === el.value; });
+  });
+  document.querySelectorAll('input[name="cabins"]').forEach(el => { el.disabled = C.cabins[el.value].minLength > state.length; });
+  $('budget').value = state.budget;
+  if ($('boatName').value !== state.name) $('boatName').value = state.name;
+}
+
+function renderUI(){
+  const p = calcPrice(state), bs = budgetStatus(p, state.budget), rec = recommend(state), P = C.propulsion[state.propulsion];
+  syncInputs();
+
+  /* Hinta ja budjettimittari */
+  $('hudPrice').textContent = eurRange(p.low, p.high);
+  const meter = $('meter'); meter.dataset.status = bs.key;
+  $('meterStatus').textContent = bs.label;
+  $('meterNote').textContent = bs.note;
+  const lo = Math.min(p.low, state.budget)*.72, hi = Math.max(p.high, state.budget)*1.1, pos = v => (v - lo)/(hi - lo)*100;
+  $('meterBand').style.left = pos(p.low) + '%'; $('meterBand').style.width = Math.max(1.5, pos(p.high) - pos(p.low)) + '%';
+  const mark = $('meterMark'), mp = pos(state.budget); mark.style.left = mp + '%';
+  mark.classList.toggle('is-right', mp > 78); mark.classList.toggle('is-left', mp < 22);
+  $('meterMarkLabel').textContent = 'Your budget ' + eur(state.budget);
+
+  /* Sirut kuvan päällä */
+  const w = C.energy[state.energy].watts;
+  $('chips').innerHTML = [state.length + ' ft', cabinText(state.cabins), state.persons + ' people', P.short, w ? nf.format(w) + ' W solar' : null]
+    .filter(Boolean).map(t => '<li>' + esc(t) + '</li>').join('');
+  $('sceneTitle').textContent = 'Catamaran at sea: ' + state.length + ' feet, ' + cabinText(state.cabins) + ', ' + state.persons + ' people on deck, ' + lower(P.label) + ', hull ' + lower(C.colors[state.color].label)
+    + (w ? ', ' + w + ' watts of solar panels' : ', no extra solar panels') + '.';
+
+  /* Miehistö ja budjetti */
+  $('crewOut').textContent = state.persons;
+  $('crewMinus').disabled = state.persons <= C.persons.min; $('crewPlus').disabled = state.persons >= C.persons.max;
+  $('crewDots').querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < state.persons));
+  $('budgetOut').textContent = eur(state.budget);
+  $('budget').style.setProperty('--p', ((state.budget - C.budget.min)/(C.budget.max - C.budget.min)*100) + '%');
+  $('budget').setAttribute('aria-valuetext', eur(state.budget));
+
+  /* Suositus */
+  const isRec = rec.length === state.length && rec.cabins === state.cabins && rec.energy === state.energy;
+  $('adviceText').innerHTML = (isRec ? 'Your choices match our recommendation: ' : 'Our recommendation for ' + state.persons + ' people and this use: ')
+    + '<strong>' + rec.length + ' ft, ' + cabinText(rec.cabins) + ', ' + lower(C.energy[rec.energy].label) + '</strong>.';
+  $('applyAdvice').hidden = isRec;
+  document.querySelectorAll('[data-rec]').forEach(el => { const [k, v] = el.dataset.rec.split(':'); el.hidden = String(rec[k]) !== v; });
+
+  /* Koko, hytit ja energia */
+  $('lengthNote').textContent = state.length + ' ft is ' + meters(state.length) + '. Base price around ' + eur(C.lengths[state.length].basePrice) + '.';
+  const berths = state.cabins*2, cn = $('cabinNote');
+  const locked = Object.keys(C.cabins).filter(k => C.cabins[k].minLength > state.length);
+  let msg = berths + ' fixed berths.';
+  if (state.persons > berths) msg += ' All ' + state.persons + ' fit for a day out, but sleeping on board takes more cabins.';
+  if (locked.length) msg += ' ' + locked.map(k => C.cabins[k].label).join(', ') + ' cabins need a hull of at least ' + C.cabins[locked[0]].minLength + ' ft.';
+  cn.textContent = msg; cn.classList.toggle('alert', state.persons > berths);
+  $('energyNote').textContent = P.electric ? 'Electric motors run on the same battery bank, so we recommend the off-grid pack.' : '';
+
+  /* Yhteenveto */
+  const rows = [
+    ['Boat name', state.name.trim() || 'Not named yet', 5],
+    ['Use', C.usage[state.usage].label, 0],
+    ['People on board', state.persons + ' people', 1],
+    ['Target budget', eur(state.budget), 1],
+    ['Length', state.length + ' ft (' + meters(state.length) + ')', 2],
+    ['Cabins', cabinText(state.cabins), 2],
+    ['Propulsion', P.label, 3],
+    ['Energy system', C.energy[state.energy].label, 4],
+    ['Hull colour', C.colors[state.color].label, 5]
+  ];
+  $('spec').innerHTML = rows.map(r => '<div><dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd><button type="button" data-goto="' + r[2] + '" aria-label="Edit: ' + r[0] + '">Edit</button></div>').join('');
+  $('summaryTitle').textContent = state.name.trim() ? 'Your dream catamaran ' + state.name.trim() : 'Your dream catamaran';
+  $('totalPrice').textContent = eurRange(p.low, p.high);
+  const tb = $('totalBudget'); tb.dataset.status = bs.key; tb.textContent = bs.label + '. ' + bs.note;
+  $('lines').innerHTML = p.lines.map(l => '<li><span>' + esc(l.label) + '</span><span>' + eurRange(roundTo(l.lo,1000), roundTo(l.hi,1000)) + '</span></li>').join('');
+}
+
+function renderStep(focus){
+  document.querySelectorAll('.step').forEach(el => { el.hidden = Number(el.dataset.step) !== step; });
+  document.querySelectorAll('#steps button').forEach((b, i) => {
+    if (i === step) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    b.classList.toggle('done', i < step);
+  });
+  const ol = $('steps'), btns = ol.querySelectorAll('.n');
+  $('stepsFill').style.width = Math.max(0, btns[step].getBoundingClientRect().left - btns[0].getBoundingClientRect().left) + 'px';
+  $('prevBtn').hidden = step === 0;
+  $('nextBtn').hidden = step === LAST;
+  $('nextBtn').textContent = step === LAST - 1 ? 'Show summary' : 'Next';
+  if (focus){
+    const top = ol.getBoundingClientRect().top + window.scrollY - (mobile.matches ? $('stage').offsetHeight : 0) - 14;
+    if (window.scrollY > top) window.scrollTo({ top, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+    const h = document.querySelector('.step:not([hidden]) h2'); if (h) h.focus({ preventScroll: true });
+  }
+}
+function goTo(i){ step = Math.max(0, Math.min(LAST, i)); renderStep(true); }
+
+/* ---------- Muutokset ---------- */
+function set(key, value){
+  const prev = Object.assign({}, state);
+  state[key] = value;
+  if (key === 'length' && C.cabins[state.cabins].minLength > state.length) state.cabins = maxCabinsFor(state.length);
+  renderUI();
+  if (key === 'budget') return;
+  if (state.length !== prev.length){ tweenLength(); return; }
+  renderBoat({
+    people: state.persons > prev.persons ? prev.persons : null,
+    cabins: state.cabins > prev.cabins ? prev.cabins : null,
+    energy: state.energy !== prev.energy,
+    usage:  state.usage !== prev.usage,
+    propulsion: state.propulsion !== prev.propulsion
+  });
+}
+
+function summaryText(){
+  const p = calcPrice(state), bs = budgetStatus(p, state.budget);
+  return [
+    'BUILD YOUR DREAM CATAMARAN – SUMMARY', '',
+    state.name.trim() ? 'Boat name: ' + state.name.trim() : null,
+    'Use: ' + C.usage[state.usage].label,
+    'People on board: ' + state.persons,
+    'Length: ' + state.length + ' ft (' + meters(state.length) + ')',
+    'Cabins: ' + C.cabins[state.cabins].label,
+    'Propulsion: ' + C.propulsion[state.propulsion].label,
+    'Energy system: ' + C.energy[state.energy].label,
+    'Hull colour: ' + C.colors[state.color].label,
+    'Target budget: ' + eur(state.budget), '',
+    'Estimated price range: ' + eurRange(p.low, p.high),
+    'Budget: ' + bs.label, '',
+    C.disclaimer,
+    C.cta.url
+  ].filter(l => l !== null).join('\n');
+}
+function say(msg){ const f = $('feedback'); f.textContent = msg; clearTimeout(say.t); say.t = setTimeout(() => { f.textContent = ''; }, 5000); }
+function copyText(text){
+  const legacy = () => { const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly',''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); return ok; };
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).then(() => true, () => legacy());
+  return Promise.resolve(legacy());
+}
+function saveBlob(blob, filename){
+  const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+function copySummary(){ copyText(summaryText()).then(ok => say(ok ? 'Details copied to the clipboard. Paste them into a message or an email.' : 'Copying did not work in this browser. Use Download summary instead.')); }
+function downloadSummary(){
+  saveBlob(new Blob([summaryText().replace(/\n/g, '\r\n')], { type: 'text/plain;charset=utf-8' }), 'dream-catamaran-summary.txt');
+  say('Summary downloaded.');
+}
+
+/* ==========================================================================
+   TARINA: alku + keskikohta + loppu arvotaan palikoista (3 × 4 × 3 = 36
+   yhdistelmää), viimeisenä kutsukortti. Kesto 32,5 s, kertojaääni selaimesta.
+   ========================================================================== */
+const SCENE_SECONDS = [8.5, 8.5, 8.5, 7];           // alku, keskikohta, loppu, kutsukortti (yhteensä 32,5 s)
+/* Rakennuspalikat. cls = taivas (k-...) ja kohtauksen osat, fx = miten vene piirretään.
+   Uuden palikan lisääminen: rivi tähän + teksti storyTexts()-funktioon. */
+const OPENS = [
+  { key:'dawn',    cls:'k-dawn',              fx:{ sailsDown:true } },
+  { key:'harbour', cls:'k-day harbour sea',   fx:{ underway:true } },
+  { key:'night',   cls:'k-night harbour sea', fx:{ underway:true, night:true } }
+];
+const MIDS = [
+  { key:'dolphins', cls:'k-day sea ev-dolphins', fx:{ underway:true } },
+  { key:'whale',    cls:'k-day sea ev-whale',    fx:{ underway:true } },
+  { key:'squall',   cls:'k-day sea ev-squall',   fx:{ underway:true } },
+  { key:'stars',    cls:'k-night sea ev-stars',  fx:{ underway:true, night:true } }
+];
+const ENDS = [
+  { key:'sunset', cls:'k-sunset isle',   fx:{} },
+  { key:'night',  cls:'k-night isle',    fx:{ sailsDown:true, night:true } },
+  { key:'swim',   cls:'k-day isle swim', fx:{ sailsDown:true } }
+];
+const NORTH_WORDS = ['norway','lofoten','iceland','greenland','svalbard','alaska','finland','sweden','faroe','arctic','antarctic','patagonia','scotland','shetland','orkney','baltic','helsinki','stockholm','lapland','fjord','denmark','estonia','åland','aland','turku','archipelago sea','newfoundland','labrador','norja','suomi','islanti','ruotsi','saaristo'];
+let sceneIdx = -1, sceneTimer = 0, soundOn = true, cardCache = null, lastFocus = null, scenes = [];
+
+const cleanName = s => String(s).replace(/[^\p{L}\p{M}' \-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 16);
+const cleanPlace = s => String(s).replace(/[^\p{L}\p{M}\p{N}' ,.\-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+function parseNames(raw){
+  let parts = String(raw).split(/[,;&\/+\n]+|\s+and\s+|\s+ja\s+/i).map(cleanName).filter(Boolean);
+  if (parts.length === 1 && /\s/.test(parts[0])) { const w = parts[0].split(' '); if (w.length <= 4) parts = w; }
+  return parts.slice(0, 4);
+}
+const listNames = a => a.length < 2 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length-1];
+const themeFor = place => NORTH_WORDS.some(w => place.toLowerCase().indexOf(w) !== -1) ? 'north' : 'warm';
+const rand = n => Math.floor(Math.random() * n);
+function rollPick(prev){                               // arpoo palikat; "Another version" vaihtaa jokaisen
+  const other = (n, p) => { let v = rand(n); if (prev) while (v === p) v = rand(n); return v; };
+  return { o: other(OPENS.length, prev && prev.o), m: other(MIDS.length, prev && prev.m), e: other(ENDS.length, prev && prev.e), w: rand(4) };
+}
+
+function storyTexts(){
+  const nm = listNames(story.names), place = story.place, Place = place.charAt(0).toUpperCase() + place.slice(1);
+  const P = C.propulsion[state.propulsion], north = story.theme === 'north', name = state.name.trim();
+  const boat = name || 'the catamaran', boats = name ? name + "'s" : "the catamaran's";
+  const prop = P.electric ? ', gliding out on silent electric motors' : (P.sails ? ', sails up before the harbour wall' : ', twin diesels humming');
+  const one = story.names[story.pick.w % story.names.length], inv = listNames(story.invitees);
+  return {
+    open: {
+      dawn:    'One quiet morning, ' + nm + ' untied the lines and left the ordinary behind.',
+      harbour: 'It started as a joke over dinner. A week later, ' + nm + ' cast off for real' + prop + '.',
+      night:   nm + ' slipped out of the harbour before anyone was awake. Only the lighthouse saw ' + boat + ' go.'
+    },
+    mid: {
+      dolphins: 'Somewhere past the horizon, dolphins raced ' + boats + ' twin bows, and won.',
+      whale:    'Halfway to ' + place + ', a whale surfaced beside ' + boat + ', took a long look and approved.',
+      squall:   'A squall chased ' + boat + ' for an hour. The rainbow afterwards stayed all afternoon.',
+      stars:    'On night watch, ' + one + ' counted eleven shooting stars, and then stopped counting.'
+    },
+    end: {
+      sunset: 'Then ' + place + ' rose out of the sea, and the anchor went down in ' + (north ? 'still, clear water beneath the mountains.' : 'warm, clear water.'),
+      night:  Place + ' appeared at dusk. That night, under ' + (north ? 'the northern lights' : 'a sky full of stars') + ', nobody mentioned going home.',
+      swim:   Place + ' arrived with the morning sun. Somebody jumped in ' + (north ? 'anyway, very briefly.' : 'before the anchor was even set.')
+    },
+    card: (inv ? inv + ', this' : 'This') + ' is your invitation. There is a place on board with your name on it.'
+  };
+}
+function buildScenes(){
+  const o = OPENS[story.pick.o], m = MIDS[story.pick.m], e = ENDS[story.pick.e], t = storyTexts();
+  return [
+    { cls:o.cls, fx:o.fx, text:t.open[o.key] },
+    { cls:m.cls, fx:m.fx, text:t.mid[m.key] },
+    { cls:e.cls, fx:e.fx, text:t.end[e.key] },
+    { cls:e.cls + ' card', fx:e.fx, text:t.card, card:true }
+  ];
+}
+
+/* Taustan osat, jotka rakennetaan kerran */
+function palm(x, y, h, lean){
+  const tx = x + lean, ty = y - h;
+  let o = '<path d="M' + x + ',' + y + 'Q' + (x + lean*.2) + ',' + (y - h*.6) + ' ' + tx + ',' + ty + '" stroke="#6b4a2b" stroke-width="4" fill="none" stroke-linecap="round"/>';
+  [[-30,6],[-22,-12],[-4,-20],[16,-16],[28,2],[20,14],[-18,16]].forEach(f => {
+    o += '<path d="M' + tx + ',' + ty + 'Q' + (tx + f[0]*.6) + ',' + (ty + f[1] - 10) + ' ' + (tx + f[0]) + ',' + (ty + f[1]) + '" stroke="#1f6a47" stroke-width="5" fill="none" stroke-linecap="round"/>';
+  });
+  return o;
+}
+function buildStoryScenery(){
+  $('isleWarm').innerHTML = '<path d="M450,762Q540,640 630,668Q700,610 800,700L880,762Z" fill="#2c7a5a"/><path d="M500,762Q570,700 650,716Q720,690 810,762Z" fill="#256b4f"/>'
+    + '<path d="M430,762Q500,745 590,750Q680,745 880,762Z" fill="#f0deb0"/>' + palm(548, 752, 72, -10) + palm(604, 750, 88, 12) + palm(668, 752, 60, 8);
+  $('isleNorth').innerHTML = '<path d="M380,762L462,632L506,688L572,580L640,696L694,642L800,762Z" fill="#44566e"/><path d="M430,762L520,690L600,740L690,700L800,762Z" fill="#33445a"/>'
+    + '<path d="M572,580L551,615L566,609L578,622L592,612Z" fill="#fff"/><path d="M462,632L449,654L462,650L472,659L479,654Z" fill="#fff"/><path d="M694,642L682,661L694,657L704,662Z" fill="#fff"/>'
+    + '<path d="M370,762Q500,744 820,762Z" fill="#26364a"/><rect x="538" y="741" width="17" height="11" fill="#b8402f"/><path d="M535,742L546.5,733L558,742Z" fill="#7d2a20"/><rect x="544" y="745" width="4" height="4" fill="#ffe09a"/>';
+  /* Satama: aallonmurtaja ja majakka */
+  $('sHarbour').innerHTML = '<path id="sBeam" d="M112,621L470,572V670Z" fill="url(#sBeamG)"/>'
+    + '<path d="M-80,762L-52,740H214L242,762Z" fill="#5b6876"/><path d="M-52,740H214" stroke="#7d8a97" stroke-width="3"/>'
+    + '<path d="M96,740L102,636H122L128,740Z" fill="#f4f6f7"/><path d="M99.3,692H124.7L125.9,714H98.1Z" fill="#c8452f"/>'
+    + '<rect x="97" y="630" width="30" height="6" fill="#2b3a4a"/><rect x="104" y="612" width="16" height="18" fill="#ffe9a8" stroke="#2b3a4a" stroke-width="1.5"/><path d="M100,612L112,600L124,612Z" fill="#c8452f"/>';
+  /* Sadekuuro ja sateenkaari */
+  let rain = '';
+  for (let i = 0; i < 36; i++) rain += '<path d="M' + (8 + (i*37) % 300) + ',' + (296 + (i*53) % 410) + 'l-14,44"/>';
+  $('sSquall').innerHTML = '<g fill="#4c5b70"><ellipse cx="150" cy="228" rx="172" ry="46"/><ellipse cx="74" cy="262" rx="112" ry="34"/><ellipse cx="244" cy="266" rx="122" ry="36"/></g>'
+    + '<ellipse cx="160" cy="282" rx="152" ry="26" fill="#3d4a5e"/><g stroke="#e3edf4" stroke-width="1.7" stroke-linecap="round" opacity=".75">' + rain + '</g>';
+  $('sRainbow').innerHTML = ['#e8674f','#f0a25a','#f3d572','#74c79a','#5aa7d8'].map((c, i) => { const r = 336 - i*12;
+    return '<path d="M' + (360 - r) + ',790A' + r + ',' + r + ' 0 0 1 ' + (360 + r) + ',790" stroke="' + c + '"/>'; }).join('');
+  let seed = 7, stars = ''; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 54; i++){ const big = rnd() > .82;
+    stars += '<circle' + (i % 3 === 0 ? ' class="twinkle" style="animation-delay:' + (rnd()*2).toFixed(2) + 's"' : '') + ' cx="' + (rnd()*900 - 90).toFixed(0) + '" cy="' + (rnd()*800 - 140).toFixed(0) + '" r="' + (big ? 2 : 1.1) + '" opacity="' + (.5 + rnd()*.5).toFixed(2) + '"/>'; }
+  $('sStars').innerHTML = stars;
+  const seaD = wave(761, 3, 120, -320, 1160) + 'V1600H-320Z';
+  $('sFront').setAttribute('d', seaD); document.querySelectorAll('.seaShape').forEach(el => el.setAttribute('d', seaD));
+  $('sWave').setAttribute('d', wave(761, 3, 120, -320, 1160) + wave(800, 2.6, 120, -280, 1160) + wave(856, 3, 120, -340, 1160) + wave(930, 3.4, 120, -300, 1160) + wave(1030, 4, 120, -360, 1160));
+  $('storyBars').innerHTML = SCENE_SECONDS.map(() => '<i><b></b></i>').join('');
+}
+function storyBoat(fx){
+  const L = state.length * PX_FT, k = Math.min(1.15, 560 / (L + 60));
+  const tf = 'translate(' + (360 - 500*k).toFixed(1) + ',' + (760 - 540*k).toFixed(1) + ') scale(' + k.toFixed(3) + ')';
+  const base = Object.assign({ id:'s' }, fx);
+  $('sBoat').setAttribute('transform', tf); $('sLights').setAttribute('transform', tf);
+  $('sBoat').innerHTML = boatSVG(L, state, base);
+  $('sLights').innerHTML = fx.night ? boatSVG(L, state, Object.assign({ lightsOnly:true }, base)) : '';
+  ['sBoatWrap','sIsle','sHarbour'].forEach(id => { if (fx.night) $(id).setAttribute('filter', 'url(#sNight)'); else $(id).removeAttribute('filter'); });
+}
+
+/* Kertojaääni: selaimen oma puhesynteesi, ei ulkoisia palveluita */
+function pickVoice(){
+  if (!('speechSynthesis' in window)) return null;
+  const v = speechSynthesis.getVoices().filter(x => /^en[-_]/i.test(x.lang) || x.lang === 'en');
+  const pref = ['Google UK English Female','Samantha','Serena','Karen','Daniel','Google US English'];
+  for (const name of pref){ const hit = v.find(x => x.name.indexOf(name) !== -1); if (hit) return hit; }
+  return v.find(x => /en-GB/i.test(x.lang)) || v[0] || null;
+}
+function speak(text){
+  if (!soundOn || !('speechSynthesis' in window)) return;
+  try { const u = new SpeechSynthesisUtterance(text), voice = pickVoice();
+    if (voice){ u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-GB';
+    u.rate = .97; u.pitch = 1; speechSynthesis.speak(u); } catch (e) {}
+}
+function hush(){ if ('speechSynthesis' in window) try { speechSynthesis.cancel(); } catch (e) {} }
+
+function setScene(i){
+  const sc = scenes[i], card = $('inviteCard');
+  sceneIdx = i;
+  $('storySvg').setAttribute('class', sc.cls + ' ' + story.theme);
+  storyBoat(sc.fx);
+  if (sc.card){ card.src = cardDataUrl(); card.alt = cardAlt(); card.hidden = false; card.classList.remove('in'); void card.offsetWidth; card.classList.add('in'); }
+  else card.hidden = true;
+  const cap = $('caption'); cap.textContent = sc.text; cap.classList.remove('in'); void cap.offsetWidth; cap.classList.add('in');
+  $('storyBars').querySelectorAll('b').forEach((b, j) => {
+    b.style.transition = 'none'; b.style.width = j < i ? '100%' : '0';
+    if (j === i){ void b.offsetWidth; b.style.transition = 'width ' + SCENE_SECONDS[i] + 's linear'; b.style.width = '100%'; }
+  });
+  speak(sc.text);
+}
+function nextScene(){
+  if (sceneIdx + 1 >= scenes.length){ finishStory(); return; }
+  setScene(sceneIdx + 1);
+  sceneTimer = setTimeout(nextScene, SCENE_SECONDS[sceneIdx] * 1000);
+}
+function playStory(){
+  clearTimeout(sceneTimer); hush();
+  scenes = buildScenes();
+  $('storyCover').hidden = true; $('storyEnd').hidden = true; $('inviteCard').hidden = true; $('caption').hidden = false; $('shareMore').open = false;
+  const svg = $('storySvg'), first = OPENS[story.pick.o];
+  svg.setAttribute('class', 'reset ' + (first.key === 'dawn' ? '' : first.cls.split(' ')[0] + ' pre-harbour') + ' ' + story.theme); void svg.getBoundingClientRect();
+  sceneIdx = -1; nextScene();
+}
+function finishStory(){
+  clearTimeout(sceneTimer);
+  $('caption').hidden = true;
+  $('endTitle').textContent = story.shared ? 'You are invited. Say yes, then build a boat of your own.'
+    : 'Send the invitation to ' + (story.invitees.length ? listNames(story.invitees) : 'someone you would take along') + '.';
+  $('storyDone').textContent = story.shared ? 'Build your own boat' : 'Back to my boat';
+  $('anotherBtn').hidden = story.shared;
+  $('shareNative').hidden = !navigator.share;
+  $('storyFeedback').textContent = '';
+  $('storyEnd').hidden = false;
+  makeCard().catch(() => {});
+  $(navigator.share ? 'shareNative' : 'replayBtn').focus({ preventScroll: true });
+}
+function openStory(cover){
+  lastFocus = document.activeElement;
+  $('story').hidden = false; document.body.classList.add('locked');
+  story.theme = themeFor(story.place);
+  if (cover){
+    const e = ENDS[story.pick.e], inv = listNames(story.invitees), crew = listNames(story.names);
+    $('storySvg').setAttribute('class', e.cls + ' ' + story.theme);
+    storyBoat(e.fx);
+    $('caption').hidden = true; $('storyEnd').hidden = true; $('inviteCard').hidden = true; $('storyCover').hidden = false;
+    $('coverTitle').textContent = inv ? inv + ', you are invited' : crew + (story.names.length > 1 ? ' have' : ' has') + ' a story for you';
+    $('coverText').textContent = crew + ' would like to take you to ' + story.place + '. It takes 30 seconds, and it is better with the sound on.';
+    $('coverPlay').focus({ preventScroll: true });
+  } else { playStory(); $('storyClose').focus({ preventScroll: true }); }
+}
+function closeStory(){
+  clearTimeout(sceneTimer); hush();
+  $('story').hidden = true; document.body.classList.remove('locked');
+  $('storySvg').setAttribute('class', ''); $('inviteCard').hidden = true;
+  if (story.shared){ story.shared = false; if (history.replaceState) history.replaceState(null, '', location.pathname); }
+  if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+}
+function scrollToStoryBox(){
+  const top = $('storyBox').getBoundingClientRect().top + window.scrollY - (mobile.matches ? $('stage').offsetHeight : 0) - 14;
+  window.scrollTo({ top, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+}
+function startStoryFromForm(){
+  const names = parseNames($('crewNames').value), place = cleanPlace($('dreamPlace').value), err = $('storyError');
+  const fail = (msg, id) => { err.textContent = msg; scrollToStoryBox(); $(id).focus({ preventScroll: true }); };
+  if (!names.length) return fail('Add at least one first name for the crew.', 'crewNames');
+  if (!place) return fail('Add the place you dream of sailing to.', 'dreamPlace');
+  err.textContent = '';
+  story.names = names; story.place = place; story.invitees = parseNames($('inviteNames').value); story.shared = false;
+  story.pick = rollPick(story.made ? story.pick : null); story.made = true; cardCache = null;
+  openStory(false);
+}
+
+/* Jakolinkki: valinnat, nimet, paikka ja arvottu tarina kulkevat osoitteen mukana */
+const b64e = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64d = str => decodeURIComponent(escape(atob(str.replace(/-/g, '+').replace(/_/g, '/'))));
+function shareUrl(){
+  const p = story.pick;
+  const data = [2, state.usage, state.persons, state.length, state.cabins, state.propulsion, state.energy, state.color, state.name.trim(), story.names, story.place, story.invitees, p.o, p.m, p.e, p.w];
+  return location.href.split(/[?#]/)[0] + '?s=' + b64e(JSON.stringify(data));
+}
+function loadShared(){
+  const m = /[?&]s=([^&#]+)/.exec(location.search); if (!m) return false;
+  try {
+    const d = JSON.parse(b64d(m[1]));
+    if (!Array.isArray(d) || (d[0] !== 1 && d[0] !== 2)) return false;
+    const list = v => (Array.isArray(v) ? v : []).map(cleanName).filter(Boolean).slice(0, 4);
+    const names = list(d[9]), place = cleanPlace(d[10] || '');
+    if (!names.length || !place) return false;
+    if (C.usage[d[1]]) state.usage = d[1];
+    if (Number.isInteger(d[2])) state.persons = Math.max(C.persons.min, Math.min(C.persons.max, d[2]));
+    if (C.lengths[d[3]]) state.length = Number(d[3]);
+    if (C.cabins[d[4]]) state.cabins = Number(d[4]);
+    if (C.cabins[state.cabins].minLength > state.length) state.cabins = maxCabinsFor(state.length);
+    if (C.propulsion[d[5]]) state.propulsion = d[5];
+    if (C.energy[d[6]]) state.energy = d[6];
+    if (C.colors[d[7]]) state.color = d[7];
+    state.name = String(d[8] || '').replace(/[<>]/g, '').slice(0, 18);
+    const idx = (v, n) => (Number.isInteger(v) && v >= 0 && v < n) ? v : 0;
+    story.names = names; story.place = place; story.shared = true; story.made = true;
+    story.invitees = d[0] === 2 ? list(d[11]) : [];
+    story.pick = d[0] === 2 ? { o: idx(d[12], OPENS.length), m: idx(d[13], MIDS.length), e: idx(d[14], ENDS.length), w: idx(d[15], 4) } : { o:0, m:0, e:0, w:0 };
+    shownL = state.length * PX_FT;
+    return true;
+  } catch (e) { return false; }
+}
+
+/* Kutsukortti (1080 × 1350): sama kuva tarinan viimeisenä diana ja ladattavana tiedostona */
+function fitLines(text, max){
+  const words = text.split(' '), lines = [''];
+  words.forEach(w => { const cur = lines[lines.length-1]; if ((cur + ' ' + w).trim().length > max && cur) lines.push(w); else lines[lines.length-1] = (cur + ' ' + w).trim(); });
+  return lines;
+}
+function twoLines(text, max){
+  if (text.length <= max) return [text];
+  const l = fitLines(text, Math.ceil(text.length / 2) + 3);
+  return l.length > 2 ? [l[0], l.slice(1).join(' ')] : l;
+}
+const sizeFor = (lines, base, budget) => Math.min(base, Math.floor(budget / Math.max.apply(null, lines.map(l => l.length).concat(1))));
+function cardAlt(){
+  const inv = listNames(story.invitees), name = state.name.trim();
+  return 'Invitation card. ' + (inv ? 'Dear ' + inv + ', you' : 'You') + ' are invited aboard ' + (name ? name + ', ' : '') + 'a ' + state.length + '-foot catamaran bound for ' + story.place + '. From ' + listNames(story.names) + '.';
+}
+function inviteSVG(){
+  const L = state.length * PX_FT, P = C.propulsion[state.propulsion], WL = 600;
+  const k = Math.min(1.6, 800 / (L + 90), 500 / (P.sails ? L*.74 + 115 : 175));
+  const serif = 'font-family="Iowan Old Style,Palatino Linotype,Palatino,Georgia,serif" font-style="italic"';
+  const sans = 'font-family="Avenir Next,Avenir,Segoe UI,Helvetica Neue,Roboto,Arial,sans-serif"';
+  const crew = listNames(story.names), inv = listNames(story.invitees), name = state.name.trim();
+  const items = [];                                   // [teksti, koko, tyyli, rivin korkeus]
+  if (inv){ const dear = twoLines('Dear ' + inv + ',', 36), ds = sizeFor(dear, 44, 1800); dear.forEach(l => items.push([l, ds, serif + ' fill="#566777"', 56])); }
+  items.push(['You are invited', 108, serif + ' fill="#0b2a47"', inv ? 122 : 108]);
+  const aboard = name ? 'aboard ' + name + ', a ' + state.length + '-foot catamaran' : 'aboard a ' + state.length + '-foot dream catamaran';
+  items.push([aboard, sizeFor([aboard], 42, 1780), sans + ' fill="#0c2238"', 70]);
+  const bound = 'bound for ' + story.place + '.';
+  items.push([bound, sizeFor([bound], 48, 1700), sans + ' font-weight="600" fill="#8a6a36"', 62]);
+  items.push(['Departure: the day you say yes.', 34, sans + ' fill="#566777"', 74]);
+  const from = twoLines('From ' + crew + '. Your place on board is saved.', 58), fsz = sizeFor(from, 31, 1780);
+  from.forEach((l, i) => items.push([l, fsz, sans + ' fill="#0c2238"', i ? 42 : 58]));
+  const total = items.reduce((t, it) => t + it[3], 0);
+  let y = 716 + (548 - total) / 2, text = '';
+  items.forEach(it => { y += it[3]; text += '<text x="540" y="' + y.toFixed(0) + '" text-anchor="middle" font-size="' + it[1] + '" ' + it[2] + '>' + esc(it[0]) + '</text>'; });
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">'
+    + '<defs><clipPath id="cClip"><rect x="28" y="28" width="1024" height="1294" rx="14"/></clipPath>'
+    + '<linearGradient id="cSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f2462"/><stop offset=".42" stop-color="#8d3f7c"/><stop offset=".8" stop-color="#f08a55"/><stop offset="1" stop-color="#fdd48a"/></linearGradient>'
+    + '<linearGradient id="cSea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0a068"/><stop offset=".3" stop-color="#b9607c"/><stop offset="1" stop-color="#4b3b80"/></linearGradient>'
+    + '<linearGradient id="cFront" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0907a" stop-opacity=".55"/><stop offset=".3" stop-color="#b9607c" stop-opacity=".95"/><stop offset="1" stop-color="#4b3b80"/></linearGradient>'
+    + '<radialGradient id="cGlow"><stop offset="0" stop-color="#fff1c4" stop-opacity=".9"/><stop offset=".4" stop-color="#ffdf9a" stop-opacity=".3"/><stop offset="1" stop-color="#ffdf9a" stop-opacity="0"/></radialGradient></defs>'
+    + '<rect width="1080" height="1350" fill="#0b2a47"/><g clip-path="url(#cClip)">'
+    + '<rect x="28" y="28" width="1024" height="' + (WL - 28) + '" fill="url(#cSky)"/><circle cx="236" cy="' + (WL - 64) + '" r="230" fill="url(#cGlow)"/><circle cx="236" cy="' + (WL - 64) + '" r="60" fill="#ffecb5"/>'
+    + '<rect x="28" y="' + WL + '" width="1024" height="' + (702 - WL) + '" fill="url(#cSea)"/>'
+    + '<g transform="translate(' + (540 - 500*k).toFixed(1) + ',' + (WL - 540*k).toFixed(1) + ') scale(' + k.toFixed(3) + ')">' + boatSVG(L, state, { id:'c' }) + '</g>'
+    + '<rect x="28" y="' + (WL + 2) + '" width="1024" height="' + (700 - WL) + '" fill="url(#cFront)"/>'
+    + '<path d="' + wave(WL + 34, 3, 150, -20, 1200) + wave(WL + 70, 3.5, 150, -80, 1200) + '" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width="2"/>'
+    + '<rect x="28" y="700" width="1024" height="622" fill="#f7f9fa"/><rect x="28" y="697" width="1024" height="5" fill="#dcc08c"/>' + text
+    + '<text x="540" y="1296" text-anchor="middle" font-size="25" ' + sans + ' fill="#8a6a36">Build your own dream catamaran at globalcatamarans.com</text>'
+    + '</g></svg>';
+}
+const cardDataUrl = () => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(inviteSVG());
+function makeCard(){
+  if (cardCache) return Promise.resolve(cardCache);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => { try { const c = document.createElement('canvas'); c.width = 1080; c.height = 1350; c.getContext('2d').drawImage(img, 0, 0, 1080, 1350);
+      c.toBlob(b => { if (b){ cardCache = b; resolve(b); } else reject(new Error('no image')); }, 'image/png'); } catch (e) { reject(e); } };
+    img.onerror = () => reject(new Error('image failed'));
+    img.src = cardDataUrl();
+  });
+}
+
+function storySay(msg){ $('storyFeedback').textContent = msg; }
+function shareImage(alsoCopy){
+  const fname = 'dream-catamaran-invitation.png';
+  makeCard().then(blob => {
+    const file = (typeof File === 'function') ? new File([blob], fname, { type: 'image/png' }) : null;
+    (alsoCopy ? copyText(shareUrl()) : Promise.resolve(false)).then(copied => {
+      const extra = copied ? ' Link copied: open Instagram, add the invitation to your Story and paste the link into the Link sticker.' : '';
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })){
+        navigator.share({ files: [file] }).then(() => storySay('Invitation shared.' + extra), () => { saveBlob(blob, fname); storySay('Invitation saved.' + extra); });
+      } else { saveBlob(blob, fname); storySay('Invitation saved.' + extra); }
+    });
+  }, () => storySay('The invitation image could not be created in this browser. Use Copy link instead.'));
+}
+function share(kind){
+  const url = shareUrl(), crew = listNames(story.names), inv = listNames(story.invitees), enc = encodeURIComponent;
+  const text = crew + (story.names.length > 1 ? ' are' : ' is') + ' inviting ' + (inv || 'you') + ' on a voyage to ' + story.place + '. Watch the story:';
+  const open = u => window.open(u, '_blank', 'noopener');
+  if (kind === 'native') navigator.share({ title: 'An invitation to a dream catamaran', text, url }).catch(() => {});
+  else if (kind === 'whatsapp') open('https://wa.me/?text=' + enc(text + ' ' + url));
+  else if (kind === 'facebook') open('https://www.facebook.com/sharer/sharer.php?u=' + enc(url));
+  else if (kind === 'x') open('https://twitter.com/intent/tweet?text=' + enc(text) + '&url=' + enc(url));
+  else if (kind === 'linkedin') open('https://www.linkedin.com/sharing/share-offsite/?url=' + enc(url));
+  else if (kind === 'telegram') open('https://t.me/share/url?url=' + enc(url) + '&text=' + enc(text));
+  else if (kind === 'email') location.href = 'mailto:?subject=' + enc('You are invited aboard a dream catamaran') + '&body=' + enc(text + '\n\n' + url);
+  else if (kind === 'copy') copyText(url).then(ok => storySay(ok ? 'Link copied. Paste it anywhere.' : 'Copying did not work in this browser.'));
+  else if (kind === 'instagram') shareImage(true);
+  else if (kind === 'image') shareImage(false);
+}
+
+/* ---------- Tapahtumat ---------- */
+buildForm(); buildStoryScenery();
+const cameShared = loadShared();
+$('form').addEventListener('change', e => {
+  const t = e.target; if (t.type !== 'radio') return;
+  set(t.name, (t.name === 'length' || t.name === 'cabins') ? Number(t.value) : t.value);
+});
+$('budget').addEventListener('input', e => set('budget', Number(e.target.value)));
+$('boatName').addEventListener('input', e => set('name', e.target.value.slice(0, 18)));
+$('boatName').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); goTo(step + 1); } });
+$('crewMinus').addEventListener('click', () => set('persons', Math.max(C.persons.min, state.persons - 1)));
+$('crewPlus').addEventListener('click', () => set('persons', Math.min(C.persons.max, state.persons + 1)));
+$('applyAdvice').addEventListener('click', () => { const r = recommend(state); set('cabins', r.cabins); set('energy', r.energy); set('length', r.length); });
+$('prevBtn').addEventListener('click', () => goTo(step - 1));
+$('nextBtn').addEventListener('click', () => goTo(step + 1));
+document.addEventListener('click', e => { const b = e.target.closest('[data-goto]'); if (b) goTo(Number(b.dataset.goto)); });
+$('copyBtn').addEventListener('click', copySummary);
+$('downloadBtn').addEventListener('click', downloadSummary);
+$('restart').addEventListener('click', () => { Object.assign(state, INITIAL); ['crewNames','dreamPlace','inviteNames'].forEach(id => { $(id).value = ''; }); $('storyError').textContent = ''; renderUI(); tweenLength(); goTo(0); });
+
+$('storyBtn').addEventListener('click', startStoryFromForm);
+$('storyBtn2').addEventListener('click', startStoryFromForm);
+['crewNames','dreamPlace','inviteNames'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); startStoryFromForm(); } }));
+$('coverPlay').addEventListener('click', playStory);
+$('replayBtn').addEventListener('click', playStory);
+$('anotherBtn').addEventListener('click', () => { story.pick = rollPick(story.pick); cardCache = null; playStory(); });
+$('storyClose').addEventListener('click', closeStory);
+$('storyDone').addEventListener('click', closeStory);
+$('storyEnd').addEventListener('click', e => { const b = e.target.closest('[data-share]'); if (b) share(b.dataset.share); });
+$('soundBtn').addEventListener('click', () => {
+  soundOn = !soundOn; const b = $('soundBtn');
+  b.innerHTML = soundOn ? SOUND_ON : SOUND_OFF; b.setAttribute('aria-pressed', String(soundOn));
+  b.setAttribute('aria-label', soundOn ? 'Turn narration off' : 'Turn narration on');
+  if (!soundOn) hush();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('story').hidden) closeStory(); });
+if ('speechSynthesis' in window){ try { speechSynthesis.getVoices(); } catch (e) {} }
+window.addEventListener('pagehide', hush);
+
+renderUI(); renderBoat(); renderStep(false); fitScene();
+if ('ResizeObserver' in window){ const ro = new ResizeObserver(() => { fitScene(); renderStep(false); }); ro.observe($('stage')); ro.observe($('hud')); }
+else window.addEventListener('resize', fitScene);
+if (cameShared){ $('crewNames').value = story.names.join(', '); $('dreamPlace').value = story.place; $('inviteNames').value = story.invitees.join(', '); step = LAST; renderStep(false); openStory(true); }
+})();
+</script>
 </body>
 </html>
