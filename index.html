@@ -17,7 +17,7 @@
      1. Perushinta pituuden mukaan (lengths → basePrice)
      2. kerrotaan käyttötarkoituksen kertoimella (usage → multiplier)
      3. perushinnan ympärille tehdään haarukka (basePriceSpread, esim. ±5 %)
-     4. päälle lisätään hytit, voimanlähde, energiajärjestelmä, väri ja
+     4. päälle lisätään hyttijärjestys, voimanlähde, energiajärjestelmä, väri ja
         henkilökohtaiset varusteet – jokaisella oma ala- ja yläraja (min / max)
      5. lopputulos pyöristetään (roundTo, esim. lähimpään 5 000 euroon)
 
@@ -68,12 +68,21 @@ const PRICING_CONFIG = {
     }
   },
 
-  // HYTIT: lisähinta (min–max) ja lyhin runko, johon hyttimäärä mahtuu.
-  cabins: {
-    2: { label: '2',  min: 0,     max: 0,     minLength: 40 },
-    3: { label: '3',  min: 15000, max: 25000, minLength: 40 },
-    4: { label: '4',  min: 30000, max: 45000, minLength: 40 },
-    5: { label: '5+', min: 50000, max: 75000, minLength: 50 }
+  // HYTTIJÄRJESTYS (layout): omistajaversio vai charter-versio.
+  //   cabinsByLength = hyttien määrä kullakin pituudella. NÄMÄ OVAT OLETUKSIA:
+  //                    tarkista valmistajittain ja korjaa tarvittaessa.
+  //   min–max        = lisähinta verrattuna omistajaversioon
+  layouts: {
+    owner: {
+      label: 'One hull just for you', term: "Owner's version",
+      text: 'One whole hull becomes your own suite, with a large bed and a private bathroom. Guests sleep in the other hull.',
+      cabinsByLength: { 40: 3, 45: 3, 50: 4, 55: 5, 60: 5 }, min: 0, max: 0
+    },
+    charter: {
+      label: 'A cabin for everyone', term: 'Charter version',
+      text: 'Both hulls are split into equal double cabins. The most beds for the length.',
+      cabinsByLength: { 40: 4, 45: 4, 50: 5, 55: 6, 60: 6 }, min: 15000, max: 30000
+    }
   },
 
   // VOIMANLÄHDE (propulsion): lisähinta (min–max) verrattuna perusveneeseen,
@@ -104,22 +113,27 @@ const PRICING_CONFIG = {
     }
   },
 
-  // ENERGIA: lisähinta (min–max) ja paneeliteho watteina.
+  // ENERGIA: asiakkaalta kysytään, kuinka kauan hän haluaa olla poissa laiturista.
+  // Aurinkopaneelit ovat veneessä aina.
+  //   panels  = montako paneelia katolle piirretään
+  //   lithium = näytetäänkö litiumakkujen valonauha
+  //   short   = lyhyt nimi kuvan päällä näkyvään merkkiin
+  //   min–max = lisähinta
   energy: {
     none: {
-      label: 'Standard system',
-      text: 'No extra solar. Batteries charge underway and from shore power.',
-      watts: 0, min: 0, max: 0
+      label: 'A weekend at a time', short: 'Weekend power',
+      text: 'Standard solar keeps the lights and the fridge running between marina nights.',
+      panels: 2, lithium: false, min: 0, max: 0
     },
     basic: {
-      label: 'Basic pack 1000 W',
-      text: 'Solar panels cover lights, fridge and electronics at anchor.',
-      watts: 1000, min: 8000, max: 14000
+      label: 'A couple of weeks', short: 'Two-week power',
+      text: 'A larger solar array and more battery. Enough for two weeks at anchor.',
+      panels: 4, lithium: false, min: 8000, max: 14000
     },
     offgrid: {
-      label: 'Off-grid power pack 3000 W',
-      text: 'A large solar array and lithium batteries. Weeks away from the dock.',
-      watts: 3000, min: 35000, max: 55000
+      label: 'As long as we like', short: 'Off-grid power',
+      text: 'The roof full of solar and a lithium battery bank. No reason to go back to the dock.',
+      panels: 8, lithium: true, min: 35000, max: 55000
     }
   },
 
@@ -141,6 +155,16 @@ const PRICING_CONFIG = {
     url: 'https://globalcatamarans.com',
     text: "Let's find the right boat for you – globalcatamarans.com"
   },
+
+  // LIIDIT: mihin "Send my build to Global Catamarans" -viesti lähtee.
+  //   whatsapp = numero kansainvälisessä muodossa ilman plusmerkkiä ja välilyöntejä,
+  //              esimerkiksi '358401234567'
+  //   email    = sähköpostiosoite
+  // Jos molemmat ovat tyhjiä, painike avaa verkkosivun (cta.url) kuten ennenkin.
+  lead: { whatsapp: '', email: '' },
+
+  // TARINA: taustaäänet (aallot ja pehmeä sointu). false = pois päältä.
+  storyAmbience: true,
   disclaimer: 'The estimate is indicative and not an offer. The final price depends on the builder, model, equipment, taxes and delivery.'
 };
 /* ===================== HINNOITTELU PÄÄTTYY TÄHÄN ========================= */
@@ -327,12 +351,12 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
 .lines li{display:flex;justify-content:space-between;gap:16px;padding:3px 0}
 .lines span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
 
-.storybox{margin-top:8px;padding:26px 24px 24px;border-radius:4px;background:var(--navy);color:#fff;border-left:4px solid var(--brass-hi)}
+.storybox{margin-top:0;padding:22px 24px 22px;border-radius:4px;background:var(--navy);color:#fff;border-left:4px solid var(--brass-hi)}
 .storybox h3{margin:0 0 6px;font-size:1.3rem;font-weight:400;letter-spacing:-.01em;color:#fff}
 .storybox>p{margin:0 0 4px;font-size:.92rem;color:rgba(255,255,255,.8)}
-.storybox label{display:block;font-size:.92rem;font-weight:600;margin:16px 0 6px}
+.storybox label{display:block;font-size:.92rem;font-weight:600;margin:14px 0 6px}
 .storybox label small{display:block;font-weight:400;color:rgba(255,255,255,.68);font-size:.8rem;margin-top:1px}
-.story-error{min-height:1.3em;margin:10px 0 8px;font-size:.86rem;color:#ffb9ab;font-weight:600}
+.story-error{min-height:1.1em;margin:8px 0 6px;font-size:.86rem;color:#ffb9ab;font-weight:600}
 .btn-story,.btn-story2{width:100%;background:var(--brass-hi);border-color:var(--brass-hi);color:var(--abyss)}
 .btn-story{padding:19px 22px;font-size:1.1rem}
 .btn-story2{margin-top:14px;padding:16px 22px;font-size:1rem}
@@ -346,6 +370,19 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
 .fine{margin:18px 0 0;font-size:.78rem;color:var(--muted)}
 .feedback{min-height:1.4em;margin:10px 0 0;font-size:.86rem;color:var(--sea-deep);font-weight:600}
 .restart{margin-top:8px;background:none;border:0;padding:6px 0;font-size:.86rem;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+
+.recap{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:10px 0 16px}
+.recap-chips{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.recap-chips li{font-size:.8rem;padding:3px 10px;border:1px solid var(--line);border-radius:99px;background:#fff;white-space:nowrap}
+.recap-chips li.price{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
+.recap-link{background:none;border:0;padding:2px 0;font-size:.86rem;color:var(--sea-deep);text-decoration:underline;text-underline-offset:3px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;align-items:end}
+.opt-term{display:block;font-size:.8rem;font-weight:600;color:var(--brass);margin:1px 0 3px}
+.opt input:checked+.opt-body .opt-term{color:var(--brass-hi)}
+.panel.on-summary .intro p{display:none}
+.panel.on-summary .intro h1{font-size:clamp(1.3rem,1.9vw,1.7rem);margin:0}
+.panel.on-summary .steps-wrap{margin-top:18px}
+.panel.on-summary .step{margin-top:20px}
 
 /* ---------- Tarina-animaatio ---------- */
 .story{position:fixed;inset:0;z-index:50;background:rgba(3,10,24,.94);display:grid;place-items:center}
@@ -392,6 +429,25 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
 .end-row{display:flex;justify-content:space-between;gap:10px;margin-top:8px}
 .end-row button{background:none;border:0;color:#fff;font-size:.86rem;text-decoration:underline;text-underline-offset:3px;padding:8px 0}
 
+.tap-hint{position:absolute;left:0;right:0;bottom:2.6%;z-index:2;text-align:center;font-size:.74rem;color:rgba(255,255,255,.72);pointer-events:none}
+#storySvg,.caption{cursor:pointer}
+.end-sub{margin:-6px 0 12px;font-size:.9rem;color:rgba(255,255,255,.84)}
+.replies{display:grid;gap:8px;margin:0 0 8px}
+.replies button{padding:12px 14px;border-radius:3px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.08);color:#fff;font-size:.92rem;font-weight:600;text-align:left}
+.replies button:hover{background:rgba(255,255,255,.22)}
+.replies button:focus-visible{outline:2px solid var(--brass-hi);outline-offset:2px}
+.lead{margin-top:10px}
+.lead p{margin:0 0 8px;font-size:.84rem;color:rgba(255,255,255,.82)}
+#imIn{width:100%;font-size:1.1rem;padding:16px}
+#sCity{opacity:0;transition:opacity 1.6s ease}
+.k-grey #sCity{opacity:1}
+.reset #sCity{transition:none}
+.k-grey #sSun{transform:none!important;transition:none}
+.k-grey .rain{animation:rain .8s linear infinite}
+@keyframes rain{to{transform:translate(-10px,40px)}}
+.lit-new{animation:litNew 1.8s ease both}
+@keyframes litNew{0%{opacity:0}60%{opacity:1}}
+#storySvg.lift #sWorld{transform:translateY(-330px) scale(1.2);transition:transform 2.4s ease-in-out}
 #storySvg .sky,#storySvg .tint,#sStars,#sMoon,#sAurora{opacity:0;transition:opacity 1.8s ease}
 #storySvg.k-dawn .sky-dawn,#storySvg.k-day .sky-day,#storySvg.k-sunset .sky-sunset,#storySvg.k-night .sky-night{opacity:1}
 #storySvg.k-dawn .tint-dawn{opacity:.9}
@@ -495,7 +551,7 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
   .ev-whale #sFluke,.ev-whale #sHump{animation:none;transform:none}
   .ev-squall #sSquall{animation:none;opacity:0}
   .ev-squall #sRainbow{animation:none;opacity:.85}
-  .ev-stars .shoot,.swim .ring,.invite.in{animation:none}
+  .ev-stars .shoot,.swim .ring,.invite.in,.k-grey .rain,.lit-new{animation:none}
   *{transition:none!important}
 }
 
@@ -530,9 +586,16 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
   .spec dt{grid-column:1/-1}
   .crew output{font-size:2.5rem}
   .storybox{padding:20px 16px}
+  .recap{margin:8px 0 12px}
+  .panel.on-summary .intro{display:none}
+  .panel.on-summary .steps-wrap{margin-top:0}
+  .chips li:nth-child(n+4){display:none}
 }
 @media (max-width:900px) and (max-height:480px){
   .stage{position:relative;height:78vh}
+}
+@media (max-width:480px){
+  .pair{grid-template-columns:1fr}
 }
 @media (max-height:720px){
   .invite{top:70px;height:calc(50% - 74px)}
@@ -647,14 +710,8 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
     <form id="form" autocomplete="off" onsubmit="return false">
 
       <section class="step" data-step="0">
-        <h2 tabindex="-1">How will you use her?</h2>
-        <p class="lead">The way you plan to use the boat sets the equipment level and shapes our recommendations.</p>
-        <div class="opts" id="usageOpts" role="radiogroup" aria-label="Use"></div>
-      </section>
-
-      <section class="step" data-step="1" hidden>
         <h2 tabindex="-1">Who is coming, and what is the budget?</h2>
-        <p class="lead">Your crew appears on deck right away. We check every choice against your budget.</p>
+        <p class="lead">Your crew appears on deck right away. From here on we check every choice against your budget.</p>
         <h3 id="crewLabel">People on board</h3>
         <div class="crew" role="group" aria-labelledby="crewLabel">
           <button type="button" id="crewMinus" aria-label="One person fewer">−</button>
@@ -666,6 +723,12 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
         <output class="budget-val" id="budgetOut" for="budget"></output>
         <input type="range" id="budget" name="budget">
         <div class="range-ends"><span id="budgetMin"></span><span id="budgetMax"></span></div>
+      </section>
+
+      <section class="step" data-step="1" hidden>
+        <h2 tabindex="-1">How will you use her?</h2>
+        <p class="lead">The way you plan to use the boat sets the equipment level and shapes our recommendations.</p>
+        <div class="opts" id="usageOpts" role="radiogroup" aria-label="Use"></div>
         <div class="advice">
           <p id="adviceText"></p>
           <button type="button" class="btn btn-small" id="applyAdvice">Use recommendation</button>
@@ -678,8 +741,8 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
         <h3 id="lenLabel">Length</h3>
         <div class="ruler" id="lengthOpts" role="radiogroup" aria-labelledby="lenLabel"></div>
         <p class="note" id="lengthNote"></p>
-        <h3 id="cabLabel">Cabins</h3>
-        <div class="cabins" id="cabinOpts" role="radiogroup" aria-labelledby="cabLabel"></div>
+        <h3 id="layLabel">Layout</h3>
+        <div class="opts" id="layoutOpts" role="radiogroup" aria-labelledby="layLabel"></div>
         <p class="note" id="cabinNote" aria-live="polite"></p>
       </section>
 
@@ -690,8 +753,8 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
       </section>
 
       <section class="step" data-step="4" hidden>
-        <h2 tabindex="-1">Where does the power come from?</h2>
-        <p class="lead">The panels appear on the roof. The longer you stay at anchor, the more of your own power you need.</p>
+        <h2 tabindex="-1">How long do you want to stay away from the dock?</h2>
+        <p class="lead">Every catamaran here carries solar panels. The longer you stay at anchor, the more panels and battery she needs.</p>
         <div class="opts" id="energyOpts" role="radiogroup" aria-label="Energy system"></div>
         <p class="note" id="energyNote"></p>
       </section>
@@ -709,22 +772,33 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
 
       <section class="step" data-step="6" hidden>
         <h2 tabindex="-1" id="summaryTitle">Your dream catamaran</h2>
-        <p class="lead">She is ready. Send her on her first voyage, then check the numbers below.</p>
+        <div class="recap">
+          <ul class="recap-chips" id="recapChips"></ul>
+          <button type="button" class="recap-link" id="seeChoices">See all choices and the price</button>
+        </div>
 
         <div class="storybox" id="storyBox">
-          <h3>Turn her into a story and an invitation</h3>
-          <p>Three answers, and your catamaran sails off in a 30-second animated story. It ends with an invitation card you can send.</p>
-          <label for="crewNames">Who is on board? <small>First names, 1 to 4, separated by commas</small></label>
-          <input type="text" id="crewNames" maxlength="80" placeholder="Anna, Mikko" autocomplete="off">
+          <h3>Now invite someone aboard</h3>
+          <p>Your catamaran sails off in a short animated story, told in your own voice. It ends with an invitation you can send.</p>
+          <div class="pair">
+            <div>
+              <label for="crewNames">Who is on board? <small>First names, 1 to 4</small></label>
+              <input type="text" id="crewNames" maxlength="80" placeholder="Anna, Mikko" autocomplete="off">
+            </div>
+            <div>
+              <label for="inviteNames">Who would you invite along? <small>1 to 4 names</small></label>
+              <input type="text" id="inviteNames" maxlength="80" placeholder="Sanna, Olli" autocomplete="off">
+            </div>
+          </div>
           <label for="dreamPlace">Where would you sail her?</label>
           <input type="text" id="dreamPlace" maxlength="40" placeholder="The Caribbean, Mallorca, Lofoten…" autocomplete="off">
-          <label for="inviteNames">Who would you invite along? <small>1 to 4 names. They get the invitation card.</small></label>
-          <input type="text" id="inviteNames" maxlength="80" placeholder="Sanna, Olli" autocomplete="off">
+          <label for="whyThem">Why them? <small>Optional. One line in your own words, read out in the story.</small></label>
+          <input type="text" id="whyThem" maxlength="70" placeholder="Because you always said someday." autocomplete="off">
           <p class="story-error" id="storyError" role="alert"></p>
           <button type="button" class="btn btn-story" id="storyBtn"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3l12 7-12 7z"/></svg>Create your story</button>
         </div>
 
-        <h3>Your choices</h3>
+        <h3 id="choicesTitle">Your choices</h3>
         <dl class="spec" id="spec"></dl>
         <div class="total">
           <p class="total-label">Estimated price range</p>
@@ -735,7 +809,7 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
 
         <button type="button" class="btn btn-story2" id="storyBtn2"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3l12 7-12 7z"/></svg>Create your story</button>
 
-        <p class="cta-lead">Or tell us what you built. We look for boats on the market that match these wishes.</p>
+        <p class="cta-lead">Want to make it real? Tell us what you built. We look for boats on the market that match these wishes.</p>
         <div class="actions">
           <a class="btn" id="cta" target="_blank" rel="noopener"></a>
           <button type="button" class="btn" id="copyBtn">Copy details</button>
@@ -770,6 +844,7 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
         <linearGradient id="sSunsetSea" gradientUnits="userSpaceOnUse" x1="0" y1="760" x2="0" y2="1300"><stop offset="0" stop-color="#f6a765"/><stop offset=".15" stop-color="#d0687a"/><stop offset=".45" stop-color="#6a3f84"/><stop offset="1" stop-color="#1d1d4f"/></linearGradient>
         <linearGradient id="sNightSea" gradientUnits="userSpaceOnUse" x1="0" y1="760" x2="0" y2="1300"><stop offset="0" stop-color="#1a4266"/><stop offset=".3" stop-color="#0b2545"/><stop offset="1" stop-color="#030c1c"/></linearGradient>
         <linearGradient id="sBeamG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff3c4" stop-opacity=".75"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></linearGradient>
+        <linearGradient id="sGreySky" gradientUnits="userSpaceOnUse" x1="0" y1="-200" x2="0" y2="960"><stop offset="0" stop-color="#4d5761"/><stop offset=".7" stop-color="#7d8892"/><stop offset="1" stop-color="#9aa3ab"/></linearGradient>
         <clipPath id="sWhaleClip"><rect x="380" y="620" width="340" height="316"/></clipPath>
         <filter id="sBlur" x="-30%" y="-80%" width="160%" height="260%"><feGaussianBlur stdDeviation="22"/></filter>
         <filter id="sNight"><feColorMatrix type="matrix" values=".46 0 0 0 0  0 .5 0 0 .01  0 0 .62 0 .05  0 0 0 1 0"/></filter>
@@ -828,6 +903,7 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
         </g>
         <g id="sSquall"></g>
         <path id="sWave" class="sdrift" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="1.4"/>
+        <g id="sCity"></g>
       </g>
       <rect id="sDim" x="0" y="0" width="720" height="1280" fill="#030a18"/>
     </svg>
@@ -837,7 +913,7 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
       <div class="story-ctrl">
         <span class="story-brand">GLOBAL CATAMARANS</span>
         <div>
-          <button type="button" class="story-icon" id="soundBtn" aria-label="Turn narration off" aria-pressed="true"></button>
+          <button type="button" class="story-icon" id="soundBtn" aria-label="Turn sound off" aria-pressed="true"></button>
           <button type="button" class="story-icon" id="storyClose" aria-label="Close story"><svg viewBox="0 0 20 20"><path d="M4 4l12 12M16 4L4 16"/></svg></button>
         </div>
       </div>
@@ -845,6 +921,7 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
 
     <img class="invite" id="inviteCard" alt="" hidden>
     <p class="caption" id="caption" aria-live="polite"></p>
+    <span class="tap-hint" id="tapHint" hidden>Tap to skip ahead</span>
 
     <div class="story-cover" id="storyCover" hidden>
       <h2 id="coverTitle"></h2>
@@ -854,30 +931,46 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
 
     <div class="story-end" id="storyEnd" hidden>
       <h2 id="endTitle"></h2>
-      <div class="share-main" id="shareMain">
-        <button type="button" class="pri" data-share="native" id="shareNative" hidden>Share…</button>
-        <button type="button" class="pri" data-share="whatsapp">WhatsApp</button>
-        <button type="button" data-share="image">Save invitation</button>
-      </div>
-      <p class="story-feedback" id="storyFeedback" role="status" aria-live="polite"></p>
-      <details class="more" id="shareMore">
-        <summary>More ways to share</summary>
-        <div class="share">
-          <button type="button" data-share="instagram">Instagram</button>
-          <button type="button" data-share="facebook">Facebook</button>
-          <button type="button" data-share="x">X</button>
-          <button type="button" data-share="linkedin">LinkedIn</button>
-          <button type="button" data-share="telegram">Telegram</button>
-          <button type="button" data-share="email">Email</button>
-          <button type="button" data-share="copy">Copy link</button>
+      <p class="end-sub" id="endSub"></p>
+
+      <div id="endSender">
+        <div class="share-main">
+          <button type="button" class="pri" data-share="story" id="shareStory">Share the story</button>
+          <button type="button" data-share="invitation">Share the invitation</button>
         </div>
-        <ul class="tips">
-          <li>In WhatsApp, send the link first, then attach the saved invitation as a picture.</li>
-          <li>Instagram and TikTok do not take links from websites. Tap Instagram: we save the invitation and copy the link, so you can add it with the Link sticker.</li>
-          <li>Whoever opens the link sees this same story and can build a boat of their own.</li>
-        </ul>
-      </details>
-      <a class="btn btn-cta" id="storyCta" target="_blank" rel="noopener"></a>
+        <p class="story-feedback" id="storyFeedback" role="status" aria-live="polite"></p>
+        <details class="more" id="shareMore">
+          <summary>More ways to share</summary>
+          <div class="share">
+            <button type="button" data-share="whatsapp">WhatsApp</button>
+            <button type="button" data-share="instagram">Instagram</button>
+            <button type="button" data-share="facebook">Facebook</button>
+            <button type="button" data-share="x">X</button>
+            <button type="button" data-share="linkedin">LinkedIn</button>
+            <button type="button" data-share="telegram">Telegram</button>
+            <button type="button" data-share="email">Email</button>
+            <button type="button" data-share="copy">Copy link</button>
+            <button type="button" data-share="image">Save picture</button>
+          </div>
+          <ul class="tips">
+            <li>The story travels as a link. Whoever opens it sees this same story, then can answer and build a boat of their own.</li>
+            <li>The invitation travels as a picture. It works in any chat, and in Instagram and TikTok, which do not take links from websites.</li>
+          </ul>
+        </details>
+      </div>
+
+      <div id="endGuest" hidden>
+        <button type="button" class="btn btn-cta" id="imIn">I'm in</button>
+        <div id="replyBox" hidden>
+          <div class="replies" id="replies"></div>
+          <p class="story-feedback" id="guestFeedback" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div class="lead" id="leadBox">
+        <p id="leadText"></p>
+        <a class="btn btn-cta" id="storyCta" target="_blank" rel="noopener"></a>
+      </div>
       <div class="end-row">
         <button type="button" id="replayBtn">Watch again</button>
         <button type="button" id="anotherBtn">Another version</button>
@@ -892,16 +985,16 @@ input[type=range]:focus-visible{outline:2px solid var(--sea);outline-offset:4px}
 'use strict';
 const C = PRICING_CONFIG;
 const $ = id => document.getElementById(id);
-const STEP_NAMES = ['Use','Crew','Size','Propulsion','Energy','Look','Summary'];
+const STEP_NAMES = ['Crew','Use','Size','Propulsion','Energy','Look','Summary'];
 const LAST = STEP_NAMES.length - 1;
 const PX_FT = 9.5;                       // piirroksen mittakaava: pikseliä per jalka
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const mobile = window.matchMedia('(max-width: 900px)');
 
 /* ---------- Tila ---------- */
-const INITIAL = { usage:'day', persons:C.persons.initial, budget:C.budget.initial, length:45, cabins:3, propulsion:'sailDiesel', energy:'basic', color:'white', name:'' };
+const INITIAL = { usage:'day', persons:C.persons.initial, budget:C.budget.initial, length:45, layout:'owner', propulsion:'sailDiesel', energy:'basic', color:'white', name:'' };
 const state = Object.assign({}, INITIAL);
-const story = { names:[], invitees:[], place:'', theme:'warm', shared:false, pick:{ o:0, m:0, e:0, w:0 } };
+const story = { names:[], invitees:[], place:'', why:'', theme:'warm', shared:false, pick:{ d:0, l:0, m:0, e:0 } };
 let step = 0;
 let shownL = state.length * PX_FT;       // parhaillaan piirretty pituus (animoituu)
 let tweenId = 0;
@@ -913,7 +1006,8 @@ const eurRange = (a,b) => a === b ? eur(a) : eur(a) + ' – ' + eur(b);
 const roundTo = (n,to) => Math.round(n / to) * to;
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const meters = len => C.lengths[len].meters + ' m';
-const cabinText = n => C.cabins[n].label + ' cabins';
+const cabinsFor = s => C.layouts[s.layout].cabinsByLength[s.length];    // hyttimäärä tulee hyttijärjestyksestä ja pituudesta
+const cabinText = n => n + ' cabins';
 const addOn = o => (o.min || o.max) ? '+ ' + eurRange(o.min, o.max) : 'Included in base price';
 const lower = s => s.charAt(0).toLowerCase() + s.slice(1);
 
@@ -928,9 +1022,9 @@ function calcPrice(s){
   const add = (label, lo, hi) => { if (lo || hi) lines.push({ label, lo, hi }); };
   add('Hull and standard equipment, ' + s.length + ' ft', base*(1-sp), base*(1+sp));
   if (mult !== 1) add('Equipment level: ' + lower(C.usage[s.usage].label), base*(mult-1)*(1-sp), base*(mult-1)*(1+sp));
-  add('Cabins: ' + cabinText(s.cabins), C.cabins[s.cabins].min, C.cabins[s.cabins].max);
+  add('Layout: ' + lower(C.layouts[s.layout].term), C.layouts[s.layout].min, C.layouts[s.layout].max);
   add('Propulsion: ' + lower(C.propulsion[s.propulsion].label), C.propulsion[s.propulsion].min, C.propulsion[s.propulsion].max);
-  add('Energy: ' + C.energy[s.energy].label, C.energy[s.energy].min, C.energy[s.energy].max);
+  add('Power: ' + lower(C.energy[s.energy].label), C.energy[s.energy].min, C.energy[s.energy].max);
   add('Hull colour: ' + lower(C.colors[s.color].label), C.colors[s.color].min, C.colors[s.color].max);
   add('Gear for ' + s.persons + ' people', C.perPerson.min*s.persons, C.perPerson.max*s.persons);
   const lo = lines.reduce((t,l) => t + l.lo, 0), hi = lines.reduce((t,l) => t + l.hi, 0);
@@ -945,16 +1039,13 @@ function budgetStatus(p, budget){
 /* ---------- Suositus ---------- */
 function recommend(s){
   const p = s.persons;
-  let cabins = Math.min(5, Math.max(2, Math.ceil(p / 2)));
-  if (s.usage === 'charter') cabins = Math.max(cabins, 3);
   let length = p <= 4 ? 40 : p <= 6 ? 45 : p <= 8 ? 50 : p <= 10 ? 55 : 60;
   if (s.usage === 'ocean' || s.usage === 'liveaboard') length = Math.max(length, 45);
-  length = Math.max(length, C.cabins[cabins].minLength);
+  const layout = (s.usage === 'charter' || p > C.layouts.owner.cabinsByLength[length] * 2) ? 'charter' : 'owner';
   let energy = { day:'none', charter:'basic', ocean:'offgrid', liveaboard:'offgrid' }[s.usage];
   if (C.propulsion[s.propulsion].electric) energy = 'offgrid';
-  return { length, cabins, energy };
+  return { length, layout, energy };
 }
-const maxCabinsFor = len => Math.max(...Object.keys(C.cabins).map(Number).filter(n => C.cabins[n].minLength <= len));
 
 /* ==========================================================================
    VENEEN PIIRTO (SVG) – sivuprofiili, keula oikealle
@@ -1063,12 +1154,14 @@ function boatSVG(L, s, fx){
   o += '<rect x="' + n(X(.105)) + '" y="' + n(topY) + '" width="' + n(L*.30) + '" height="5.5" rx="2.7" fill="#f6f9fa"/>';
   const led = '<path d="M' + n(X(.135)) + ',' + n(topY+7) + 'H' + n(X(.325)) + '" stroke="#7ff0e2" stroke-width="3.2" opacity=".28" stroke-linecap="round"/>'
     + '<path d="M' + n(X(.135)) + ',' + n(topY+7) + 'H' + n(X(.325)) + '" stroke="#bafcf3" stroke-width="1.1" stroke-linecap="round"/>';
-  if (s.energy === 'offgrid') o += led;
+  const E = C.energy[s.energy];
+  if (E.lithium) o += led;
   lights += led;
 
-  /* Aurinkopaneelit */
-  if (s.energy === 'basic') o += solarRow(X(.15), X(.33), topY, 3, fx.energy, 0, id);
-  if (s.energy === 'offgrid') o += solarRow(X(.115), X(.395), topY, 6, fx.energy, 0, id) + solarRow(X(.515), X(.585), roofY, 2, fx.energy, 6, id);
+  /* Aurinkopaneelit: veneessä aina, määrä kasvaa energiavalinnan mukaan */
+  const pn = E.panels || 0, onTop = Math.min(pn, 6);
+  if (onTop) o += solarRow(X(.255 - onTop*.0235), X(.255 + onTop*.0235), topY, onTop, fx.energy, 0, id);
+  if (pn > 6) o += solarRow(X(.515), X(.515 + (pn - 6)*.035), roofY, pn - 6, fx.energy, 6, id);
 
   if (rig){
     /* Masto ja puomi */
@@ -1104,15 +1197,26 @@ function boatSVG(L, s, fx){
   o += '<path d="M' + n(X(.002)) + ',' + (W-5.5) + 'H' + n(X(.996)) + '" stroke="' + stripe + '" stroke-width="2.2"/>';                                           // vesilinjaraita
   o += '<path d="M' + n(X(.075)) + ',' + n(deck + fb*.2) + 'L' + n(X(.975)) + ',' + n(sheer(.975) + fb*.2) + '" stroke="' + (dark ? '#ffffff' : '#0b2a47') + '" stroke-width=".8" opacity=".14"/>';
 
-  /* Hyttien ikkunat */
-  const wn = s.cabins, r0 = X(.2), r1 = X(.9), slot = (r1-r0)/wn, ww = Math.min(L*.095, slot*.62), wh = fb*.2, wy = deck + fb*.32;
-  for (let i = 0; i < wn; i++){
-    const wx = r0 + slot*(i+.5) - ww/2;
-    const rect = 'x="' + n(wx) + '" y="' + n(wy) + '" width="' + n(ww) + '" height="' + n(wh) + '" rx="' + n(wh*.35) + '"';
-    o += '<g' + (fx.cabins != null && i >= fx.cabins ? ' class="pop"' : '') + '><rect ' + rect + ' fill="' + glass + '" stroke="' + (dark ? 'rgba(255,255,255,.4)' : 'rgba(11,42,71,.25)') + '" stroke-width=".8"/>'
-      + '<path d="M' + n(wx + ww*.12) + ',' + n(wy + wh*.3) + 'h' + n(ww*.3) + '" stroke="#fff" stroke-width=".9" opacity=".4" stroke-linecap="round"/></g>';
-    if (i % 2 === 0 || wn < 3) lights += '<rect ' + rect + ' fill="' + WARM + '"/>';
+  /* Hyttien ikkunat: omistajaversiossa yksi pitkä sviitin ikkuna, charter-versiossa tasakokoiset */
+  const wn = cabinsFor(s), r0 = X(.2), r1 = X(.9), wh = fb*.2, wy = deck + fb*.32, wins = [];
+  if (s.layout === 'owner'){
+    wins.push([r0 + (r1-r0)*.02, (r1-r0)*.46]);
+    const m = Math.max(1, wn - 2), a = r0 + (r1-r0)*.56, slot = (r1 - a)/m, ww = Math.min(L*.085, slot*.62);
+    for (let i = 0; i < m; i++) wins.push([a + slot*(i+.5) - ww/2, ww]);
+  } else {
+    const slot = (r1-r0)/wn, ww = Math.min(L*.095, slot*.62);
+    for (let i = 0; i < wn; i++) wins.push([r0 + slot*(i+.5) - ww/2, ww]);
   }
+  wins.forEach((w, i) => {
+    const rect = 'x="' + n(w[0]) + '" y="' + n(wy) + '" width="' + n(w[1]) + '" height="' + n(wh) + '" rx="' + n(wh*.35) + '"';
+    o += '<g' + (fx.layout ? ' class="pop" style="animation-delay:' + i*50 + 'ms"' : '') + '><rect ' + rect + ' fill="' + glass + '" stroke="' + (dark ? 'rgba(255,255,255,.4)' : 'rgba(11,42,71,.25)') + '" stroke-width=".8"/>'
+      + '<path d="M' + n(w[0] + w[1]*.12) + ',' + n(wy + wh*.3) + 'h' + n(Math.min(w[1]*.3, L*.03)) + '" stroke="#fff" stroke-width=".9" opacity=".4" stroke-linecap="round"/></g>';
+    /* Yövalot: tarinassa viimeinen ikkuna on pimeä (tyhjä hytti), kunnes kutsuttu vastaa */
+    const last = i === wins.length - 1;
+    if (fx.darkCabin && last) return;
+    if (fx.justLit && last) lights += '<rect class="lit-new" x="' + n(w[0]-7) + '" y="' + n(wy-7) + '" width="' + n(w[1]+14) + '" height="' + n(wh+14) + '" rx="' + n(wh*.6) + '" fill="' + WARM + '" opacity=".3"/>';
+    lights += '<rect ' + (fx.justLit && last ? 'class="lit-new" ' : '') + rect + ' fill="' + WARM + '"/>';
+  });
 
   /* Voimanlähteen merkki: salama (sähkö) tai pakoputki (diesel) */
   if (P.electric) o += '<path' + (fx.propulsion ? ' class="pop"' : '') + ' transform="translate(' + n(X(.94)) + ',' + n(sheer(.94) + fb*.3) + ')" d="M2,0L-5,9H-.5L-2.5,17L5.5,7H1Z" fill="' + (dark ? '#8ff3e6' : '#1f9c97') + '"/>';
@@ -1123,6 +1227,13 @@ function boatSVG(L, s, fx){
 
   /* Kannella oleva väki */
   o += deckPeople;
+
+  /* Tyhjä kansituoli (tarinassa): paikka, joka odottaa kutsuttua */
+  if (fx.chair){
+    const cx = X(.552), cy = sheer(.552) - 1;
+    o += '<path d="M' + n(cx-11) + ',' + n(cy) + 'l8,-14M' + n(cx+10) + ',' + n(cy) + 'l-14,-10" stroke="#b58a56" stroke-width="1.8" stroke-linecap="round"/>'
+      + '<path d="M' + n(cx-5) + ',' + n(cy-16) + 'L' + n(cx+1) + ',' + n(cy-6) + 'L' + n(cx+12) + ',' + n(cy-5) + '" stroke="#2aa6a1" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+  }
 
   /* Kaiteet ja keulapuomi */
   let rail = '';
@@ -1208,6 +1319,8 @@ function fitScene(){
    LOMAKKEEN RAKENTAMINEN (tekstit ja hinnat tulevat PRICING_CONFIGista)
    ========================================================================== */
 const ICONS = {
+  owner:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="16" rx="2"/><rect x="14" y="4" width="7" height="16" rx="2"/><path d="M14 12h7M5.5 9.5h2M5.5 13h2"/></svg>',
+  charter:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="16" rx="2"/><rect x="14" y="4" width="7" height="16" rx="2"/><path d="M3 12h7M14 12h7"/></svg>',
   day:'<svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.5"/><path d="M12 2.5v1.5M5.5 9H4M20 9h-1.5M7.2 4.6l1 1M16.8 4.6l-1 1M3 17c2-1.6 4-1.6 6 0s4 1.6 6 0 4-1.6 6 0M5 21c1.6-1.2 3.2-1.2 4.8 0s3.2 1.2 4.8 0 3.2-1.2 4.8 0"/></svg>',
   ocean:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/><path d="M12 3v1.5M12 19.5V21M3 12h1.5M19.5 12H21"/></svg>',
   charter:'<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.5 19c.6-3.4 2.8-5 5.5-5s4.9 1.6 5.5 5M14 14.3c.8-.4 1.6-.6 2.5-.6 2.4 0 4.3 1.4 5 4.3"/></svg>',
@@ -1239,9 +1352,10 @@ function buildForm(){
     '<label class="cell"><input class="sr" type="radio" name="length" value="' + k + '"><span class="cell-body"><span class="cell-big">' + k + '</span><span class="cell-unit">ft / ' + meters(k) + '</span></span>'
     + '<em class="tag" data-rec="length:' + k + '" hidden>Recommended</em></label>').join('');
 
-  $('cabinOpts').innerHTML = Object.keys(C.cabins).map(k =>
-    '<label class="cell"><input class="sr" type="radio" name="cabins" value="' + k + '"><span class="cell-body"><span class="cell-big">' + C.cabins[k].label + '</span><span class="cell-unit">' + (C.cabins[k].min || C.cabins[k].max ? '+ €' + nf.format(C.cabins[k].min/1000) + '–' + nf.format(C.cabins[k].max/1000) + 'k' : 'standard') + '</span></span>'
-    + '<em class="tag" data-rec="cabins:' + k + '" hidden>Recommended</em></label>').join('');
+  $('layoutOpts').innerHTML = Object.keys(C.layouts).map(k => { const y = C.layouts[k];
+    return '<label class="opt"><input class="sr" type="radio" name="layout" value="' + k + '"><span class="opt-body">' + ICONS[k]
+      + '<span><span class="opt-title">' + esc(y.label) + '<em class="tag" data-rec="layout:' + k + '" hidden>Recommended</em></span><span class="opt-term">' + esc(y.term) + '</span><span class="opt-text">' + esc(y.text) + '</span></span>'
+      + '<span class="opt-price" data-lay="' + k + '"></span></span></label>'; }).join('');
 
   $('colorOpts').innerHTML = Object.keys(C.colors).map(k => { const c = C.colors[k];
     return '<label class="swatch"><input class="sr" type="radio" name="color" value="' + k + '"><span class="swatch-body">'
@@ -1256,23 +1370,22 @@ function buildForm(){
   STEP_NAMES.forEach((name, i) => { const li = document.createElement('li');
     li.innerHTML = '<button type="button" data-goto="' + i + '"><span class="n">' + (i+1) + '</span><span>' + name + '</span></button>'; ol.appendChild(li); });
 
-  ['cta','storyCta'].forEach(id => { $(id).href = C.cta.url; $(id).textContent = C.cta.text; });
   $('disclaimer').textContent = C.disclaimer;
   $('soundBtn').innerHTML = SOUND_ON;
 }
 
 /* ---------- Näkymän päivitys ---------- */
 function syncInputs(){
-  ['usage','propulsion','energy','length','cabins','color'].forEach(name => {
+  ['usage','propulsion','energy','length','layout','color'].forEach(name => {
     document.querySelectorAll('input[name="' + name + '"]').forEach(el => { el.checked = String(state[name]) === el.value; });
   });
-  document.querySelectorAll('input[name="cabins"]').forEach(el => { el.disabled = C.cabins[el.value].minLength > state.length; });
   $('budget').value = state.budget;
   if ($('boatName').value !== state.name) $('boatName').value = state.name;
 }
 
 function renderUI(){
-  const p = calcPrice(state), bs = budgetStatus(p, state.budget), rec = recommend(state), P = C.propulsion[state.propulsion];
+  const p = calcPrice(state), bs = budgetStatus(p, state.budget), rec = recommend(state);
+  const P = C.propulsion[state.propulsion], E = C.energy[state.energy], Y = C.layouts[state.layout], cabins = cabinsFor(state);
   syncInputs();
 
   /* Hinta ja budjettimittari */
@@ -1286,12 +1399,12 @@ function renderUI(){
   mark.classList.toggle('is-right', mp > 78); mark.classList.toggle('is-left', mp < 22);
   $('meterMarkLabel').textContent = 'Your budget ' + eur(state.budget);
 
-  /* Sirut kuvan päällä */
-  const w = C.energy[state.energy].watts;
-  $('chips').innerHTML = [state.length + ' ft', cabinText(state.cabins), state.persons + ' people', P.short, w ? nf.format(w) + ' W solar' : null]
-    .filter(Boolean).map(t => '<li>' + esc(t) + '</li>').join('');
-  $('sceneTitle').textContent = 'Catamaran at sea: ' + state.length + ' feet, ' + cabinText(state.cabins) + ', ' + state.persons + ' people on deck, ' + lower(P.label) + ', hull ' + lower(C.colors[state.color].label)
-    + (w ? ', ' + w + ' watts of solar panels' : ', no extra solar panels') + '.';
+  /* Sirut kuvan päällä ja yhteenvedon alussa */
+  const tags = [state.length + ' ft', cabinText(cabins), state.persons + ' people', P.short, E.short];
+  $('chips').innerHTML = tags.map(t => '<li>' + esc(t) + '</li>').join('');
+  $('recapChips').innerHTML = '<li class="price">' + eurRange(p.low, p.high) + '</li>' + tags.concat(C.colors[state.color].label).map(t => '<li>' + esc(t) + '</li>').join('');
+  $('sceneTitle').textContent = 'Catamaran at sea: ' + state.length + ' feet, ' + lower(Y.term) + ' with ' + cabinText(cabins) + ', ' + state.persons + ' people on deck, ' + lower(P.label)
+    + ', hull ' + lower(C.colors[state.color].label) + ', ' + E.panels + ' solar panels.';
 
   /* Miehistö ja budjetti */
   $('crewOut').textContent = state.persons;
@@ -1302,32 +1415,32 @@ function renderUI(){
   $('budget').setAttribute('aria-valuetext', eur(state.budget));
 
   /* Suositus */
-  const isRec = rec.length === state.length && rec.cabins === state.cabins && rec.energy === state.energy;
+  const isRec = rec.length === state.length && rec.layout === state.layout && rec.energy === state.energy;
   $('adviceText').innerHTML = (isRec ? 'Your choices match our recommendation: ' : 'Our recommendation for ' + state.persons + ' people and this use: ')
-    + '<strong>' + rec.length + ' ft, ' + cabinText(rec.cabins) + ', ' + lower(C.energy[rec.energy].label) + '</strong>.';
+    + '<strong>' + rec.length + ' ft, ' + lower(C.layouts[rec.layout].term) + ', ' + lower(C.energy[rec.energy].short) + '</strong>.';
   $('applyAdvice').hidden = isRec;
   document.querySelectorAll('[data-rec]').forEach(el => { const [k, v] = el.dataset.rec.split(':'); el.hidden = String(rec[k]) !== v; });
 
-  /* Koko, hytit ja energia */
+  /* Koko, hyttijärjestys ja energia */
   $('lengthNote').textContent = state.length + ' ft is ' + meters(state.length) + '. Base price around ' + eur(C.lengths[state.length].basePrice) + '.';
-  const berths = state.cabins*2, cn = $('cabinNote');
-  const locked = Object.keys(C.cabins).filter(k => C.cabins[k].minLength > state.length);
-  let msg = berths + ' fixed berths.';
-  if (state.persons > berths) msg += ' All ' + state.persons + ' fit for a day out, but sleeping on board takes more cabins.';
-  if (locked.length) msg += ' ' + locked.map(k => C.cabins[k].label).join(', ') + ' cabins need a hull of at least ' + C.cabins[locked[0]].minLength + ' ft.';
+  document.querySelectorAll('[data-lay]').forEach(el => { const y = C.layouts[el.dataset.lay];
+    el.innerHTML = cabinText(y.cabinsByLength[state.length]) + ((y.min || y.max) ? '<br>+ ' + eurRange(y.min, y.max) : ''); });
+  const berths = cabins*2, cn = $('cabinNote');
+  let msg = cabinText(cabins) + ' and ' + berths + ' fixed berths at ' + state.length + ' ft.';
+  if (state.persons > berths) msg += ' All ' + state.persons + ' fit for a day out, but sleeping on board takes a longer boat or the charter version.';
   cn.textContent = msg; cn.classList.toggle('alert', state.persons > berths);
-  $('energyNote').textContent = P.electric ? 'Electric motors run on the same battery bank, so we recommend the off-grid pack.' : '';
+  $('energyNote').textContent = P.electric ? 'Electric motors run on the same battery bank, so we recommend the largest setup.' : '';
 
   /* Yhteenveto */
   const rows = [
     ['Boat name', state.name.trim() || 'Not named yet', 5],
-    ['Use', C.usage[state.usage].label, 0],
-    ['People on board', state.persons + ' people', 1],
-    ['Target budget', eur(state.budget), 1],
+    ['People on board', state.persons + ' people', 0],
+    ['Target budget', eur(state.budget), 0],
+    ['Use', C.usage[state.usage].label, 1],
     ['Length', state.length + ' ft (' + meters(state.length) + ')', 2],
-    ['Cabins', cabinText(state.cabins), 2],
+    ['Layout', Y.term + ', ' + cabinText(cabins), 2],
     ['Propulsion', P.label, 3],
-    ['Energy system', C.energy[state.energy].label, 4],
+    ['Time off the dock', E.label, 4],
     ['Hull colour', C.colors[state.color].label, 5]
   ];
   $('spec').innerHTML = rows.map(r => '<div><dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd><button type="button" data-goto="' + r[2] + '" aria-label="Edit: ' + r[0] + '">Edit</button></div>').join('');
@@ -1335,10 +1448,14 @@ function renderUI(){
   $('totalPrice').textContent = eurRange(p.low, p.high);
   const tb = $('totalBudget'); tb.dataset.status = bs.key; tb.textContent = bs.label + '. ' + bs.note;
   $('lines').innerHTML = p.lines.map(l => '<li><span>' + esc(l.label) + '</span><span>' + eurRange(roundTo(l.lo,1000), roundTo(l.hi,1000)) + '</span></li>').join('');
+
+  /* "Tee tästä totta" -painikkeet: viesti Global Catamaransille tai verkkosivu */
+  ['cta','storyCta'].forEach(id => { $(id).href = leadHref(); $(id).textContent = leadLabel(); });
 }
 
 function renderStep(focus){
   document.querySelectorAll('.step').forEach(el => { el.hidden = Number(el.dataset.step) !== step; });
+  document.querySelector('.panel').classList.toggle('on-summary', step === LAST);
   document.querySelectorAll('#steps button').forEach((b, i) => {
     if (i === step) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
     b.classList.toggle('done', i < step);
@@ -1360,13 +1477,12 @@ function goTo(i){ step = Math.max(0, Math.min(LAST, i)); renderStep(true); }
 function set(key, value){
   const prev = Object.assign({}, state);
   state[key] = value;
-  if (key === 'length' && C.cabins[state.cabins].minLength > state.length) state.cabins = maxCabinsFor(state.length);
   renderUI();
   if (key === 'budget') return;
   if (state.length !== prev.length){ tweenLength(); return; }
   renderBoat({
     people: state.persons > prev.persons ? prev.persons : null,
-    cabins: state.cabins > prev.cabins ? prev.cabins : null,
+    layout: state.layout !== prev.layout,
     energy: state.energy !== prev.energy,
     usage:  state.usage !== prev.usage,
     propulsion: state.propulsion !== prev.propulsion
@@ -1381,9 +1497,9 @@ function summaryText(){
     'Use: ' + C.usage[state.usage].label,
     'People on board: ' + state.persons,
     'Length: ' + state.length + ' ft (' + meters(state.length) + ')',
-    'Cabins: ' + C.cabins[state.cabins].label,
+    'Layout: ' + C.layouts[state.layout].term + ' (' + cabinsFor(state) + ' cabins)',
     'Propulsion: ' + C.propulsion[state.propulsion].label,
-    'Energy system: ' + C.energy[state.energy].label,
+    'Time off the dock: ' + C.energy[state.energy].label,
     'Hull colour: ' + C.colors[state.color].label,
     'Target budget: ' + eur(state.budget), '',
     'Estimated price range: ' + eurRange(p.low, p.high),
@@ -1410,33 +1526,44 @@ function downloadSummary(){
 }
 
 /* ==========================================================================
-   TARINA: alku + keskikohta + loppu arvotaan palikoista (3 × 4 × 3 = 36
-   yhdistelmää), viimeisenä kutsukortti. Kesto 32,5 s, kertojaääni selaimesta.
+   TARINA: kirje kutsutulle. Miehistö puhuu itse ("we" / "I"), ja kohtaus
+   vaihtuu, kun kertoja on lopettanut. Kertojaääni ja taustaäänet syntyvät selaimessa.
    ========================================================================== */
-const SCENE_SECONDS = [8.5, 8.5, 8.5, 7];           // alku, keskikohta, loppu, kutsukortti (yhteensä 32,5 s)
-/* Rakennuspalikat. cls = taivas (k-...) ja kohtauksen osat, fx = miten vene piirretään.
-   Uuden palikan lisääminen: rivi tähän + teksti storyTexts()-funktioon. */
-const OPENS = [
+const PAUSE_AFTER_SPEECH = 0.6;                       // tauko kertojan jälkeen ennen seuraavaa kohtausta (s)
+const MIN_SCENE = 3.4;                                // kohtauksen vähimmäiskesto (s), jotta kuva ehtii näkyä
+/* Tarinan runko on aina sama: harmaa arki → lähtö → elämää veneessä → kohtaaminen →
+   saapuminen → tyhjä hytti → kutsu. Neljä keskimmäistä arvotaan näistä palikoista
+   (3 × 3 × 4 × 3 = 108 yhdistelmää). cls = taivas (k-...) ja kohtauksen osat,
+   fx = miten vene piirretään. Tekstit ovat storyTexts()-funktiossa. */
+const DEPART = [
   { key:'dawn',    cls:'k-dawn',              fx:{ sailsDown:true } },
   { key:'harbour', cls:'k-day harbour sea',   fx:{ underway:true } },
   { key:'night',   cls:'k-night harbour sea', fx:{ underway:true, night:true } }
 ];
-const MIDS = [
-  { key:'dolphins', cls:'k-day sea ev-dolphins', fx:{ underway:true } },
-  { key:'whale',    cls:'k-day sea ev-whale',    fx:{ underway:true } },
-  { key:'squall',   cls:'k-day sea ev-squall',   fx:{ underway:true } },
-  { key:'stars',    cls:'k-night sea ev-stars',  fx:{ underway:true, night:true } }
+const LIFE = [
+  { key:'simple', cls:'k-dawn sea',   fx:{ underway:true, chair:true } },
+  { key:'quiet',  cls:'k-day sea',    fx:{ underway:true, chair:true } },
+  { key:'time',   cls:'k-sunset sea', fx:{ underway:true, chair:true } }
 ];
-const ENDS = [
-  { key:'sunset', cls:'k-sunset isle',   fx:{} },
-  { key:'night',  cls:'k-night isle',    fx:{ sailsDown:true, night:true } },
-  { key:'swim',   cls:'k-day isle swim', fx:{ sailsDown:true } }
+const MEET = [
+  { key:'dolphins', cls:'k-day sea ev-dolphins', fx:{ underway:true, chair:true } },
+  { key:'whale',    cls:'k-day sea ev-whale',    fx:{ underway:true, chair:true } },
+  { key:'squall',   cls:'k-day sea ev-squall',   fx:{ underway:true, chair:true } },
+  { key:'stars',    cls:'k-night sea ev-stars',  fx:{ underway:true, night:true, chair:true } }
 ];
+const ARRIVE = [
+  { key:'sunset', cls:'k-sunset isle',   fx:{ chair:true } },
+  { key:'swim',   cls:'k-day isle swim', fx:{ sailsDown:true, chair:true } },
+  { key:'night',  cls:'k-night isle',    fx:{ sailsDown:true, night:true, chair:true } }
+];
+const EMPTY = { cls:'k-night isle', fx:{ sailsDown:true, night:true, chair:true, darkCabin:true } };
+const REPLIES = ["I'm in. When do we leave?", 'Only if I get the sunny cabin.', 'Give me a week to pack.'];
 const NORTH_WORDS = ['norway','lofoten','iceland','greenland','svalbard','alaska','finland','sweden','faroe','arctic','antarctic','patagonia','scotland','shetland','orkney','baltic','helsinki','stockholm','lapland','fjord','denmark','estonia','åland','aland','turku','archipelago sea','newfoundland','labrador','norja','suomi','islanti','ruotsi','saaristo'];
-let sceneIdx = -1, sceneTimer = 0, soundOn = true, cardCache = null, lastFocus = null, scenes = [];
+let sceneIdx = -1, sceneTimer = 0, startTimer = 0, sceneToken = 0, playing = false, soundOn = true, cardCache = null, lastFocus = null, scenes = [];
 
 const cleanName = s => String(s).replace(/[^\p{L}\p{M}' \-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 16);
 const cleanPlace = s => String(s).replace(/[^\p{L}\p{M}\p{N}' ,.\-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+const cleanWhy = s => String(s).replace(/[^\p{L}\p{M}\p{N}' ,.!?\-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 70);
 function parseNames(raw){
   let parts = String(raw).split(/[,;&\/+\n]+|\s+and\s+|\s+ja\s+/i).map(cleanName).filter(Boolean);
   if (parts.length === 1 && /\s/.test(parts[0])) { const w = parts[0].split(' '); if (w.length <= 4) parts = w; }
@@ -1447,44 +1574,57 @@ const themeFor = place => NORTH_WORDS.some(w => place.toLowerCase().indexOf(w) !
 const rand = n => Math.floor(Math.random() * n);
 function rollPick(prev){                               // arpoo palikat; "Another version" vaihtaa jokaisen
   const other = (n, p) => { let v = rand(n); if (prev) while (v === p) v = rand(n); return v; };
-  return { o: other(OPENS.length, prev && prev.o), m: other(MIDS.length, prev && prev.m), e: other(ENDS.length, prev && prev.e), w: rand(4) };
+  return { d: other(DEPART.length, prev && prev.d), l: other(LIFE.length, prev && prev.l), m: other(MEET.length, prev && prev.m), e: other(ARRIVE.length, prev && prev.e) };
+}
+/* Miehistö puhuu itse: "we", kun nimiä on useita, ja "I", kun nimiä on yksi. */
+function voice(){
+  const many = story.names.length > 1;
+  return { we: many ? 'we' : 'I', We: many ? 'We' : 'I', us: many ? 'us' : 'me', our: many ? 'our' : 'my', weAre: many ? 'we are' : 'I am', WeAre: many ? 'We are' : 'I am' };
 }
 
 function storyTexts(){
-  const nm = listNames(story.names), place = story.place, Place = place.charAt(0).toUpperCase() + place.slice(1);
-  const P = C.propulsion[state.propulsion], north = story.theme === 'north', name = state.name.trim();
-  const boat = name || 'the catamaran', boats = name ? name + "'s" : "the catamaran's";
-  const prop = P.electric ? ', gliding out on silent electric motors' : (P.sails ? ', sails up before the harbour wall' : ', twin diesels humming');
-  const one = story.names[story.pick.w % story.names.length], inv = listNames(story.invitees);
+  const v = voice(), place = story.place, north = story.theme === 'north', name = state.name.trim();
+  const boat = name || 'the boat', inv = listNames(story.invitees);
   return {
-    open: {
-      dawn:    'One quiet morning, ' + nm + ' untied the lines and left the ordinary behind.',
-      harbour: 'It started as a joke over dinner. A week later, ' + nm + ' cast off for real' + prop + '.',
-      night:   nm + ' slipped out of the harbour before anyone was awake. Only the lighthouse saw ' + boat + ' go.'
+    before: (inv ? inv + '. ' : '') + v.We + ' have been saying "someday" for years.',
+    depart: {
+      dawn:    'So ' + v.we + ' stopped saying it. One quiet morning, ' + v.we + ' untied the lines.',
+      harbour: 'So ' + v.we + ' stopped saying it. ' + v.We + ' cast off on an ordinary Tuesday, and the harbour got small behind ' + v.us + '.',
+      night:   'So ' + v.we + ' stopped saying it. ' + v.We + ' slipped out before sunrise, with only the lighthouse watching.'
     },
-    mid: {
-      dolphins: 'Somewhere past the horizon, dolphins raced ' + boats + ' twin bows, and won.',
-      whale:    'Halfway to ' + place + ', a whale surfaced beside ' + boat + ', took a long look and approved.',
-      squall:   'A squall chased ' + boat + ' for an hour. The rainbow afterwards stayed all afternoon.',
-      stars:    'On night watch, ' + one + ' counted eleven shooting stars, and then stopped counting.'
+    life: {
+      simple: 'Out here the days are simple. Coffee at sunrise. Bare feet. Nowhere to be.',
+      quiet:  'It is quiet in a way you forget exists. Just wind, water, and ' + boat + ' doing what she was built for.',
+      time:   'Nobody has checked the time in days. ' + v.We + ' eat when ' + v.weAre + ' hungry and sleep when it gets dark.'
     },
-    end: {
-      sunset: 'Then ' + place + ' rose out of the sea, and the anchor went down in ' + (north ? 'still, clear water beneath the mountains.' : 'warm, clear water.'),
-      night:  Place + ' appeared at dusk. That night, under ' + (north ? 'the northern lights' : 'a sky full of stars') + ', nobody mentioned going home.',
-      swim:   Place + ' arrived with the morning sun. Somebody jumped in ' + (north ? 'anyway, very briefly.' : 'before the anchor was even set.')
+    meet: {
+      dolphins: 'Yesterday dolphins swam beside ' + v.us + ' for an hour. Nobody reached for a phone.',
+      whale:    'This morning a whale surfaced so close ' + v.we + ' could hear it breathe. Nobody said a word.',
+      squall:   'A squall came through at noon. Then a rainbow, end to end, and ' + v.we + ' just stood there getting wet.',
+      stars:    'Last night ' + v.we + ' lay on deck and counted shooting stars until ' + v.we + ' lost count.'
     },
-    card: (inv ? inv + ', this' : 'This') + ' is your invitation. There is a place on board with your name on it.'
+    arrive: {
+      sunset: 'Tonight ' + v.we + ' dropped anchor off ' + place + ', just as the sun went down.',
+      swim:   v.We + ' reached ' + place + ' this morning and swam before breakfast. ' + (north ? 'It was freezing. It was perfect.' : 'The water was warm as a bath.'),
+      night:  v.WeAre + ' anchored off ' + place + ' tonight. ' + (north ? 'The northern lights are out.' : 'The water is so still it holds the stars.')
+    },
+    empty: 'There is one cabin still empty. ' + v.We + ' kept it for you.',
+    card: 'Come with ' + v.us + '.' + (story.why ? ' ' + story.why : '')
   };
 }
 function buildScenes(){
-  const o = OPENS[story.pick.o], m = MIDS[story.pick.m], e = ENDS[story.pick.e], t = storyTexts();
+  const d = DEPART[story.pick.d], l = LIFE[story.pick.l], m = MEET[story.pick.m], e = ARRIVE[story.pick.e], t = storyTexts();
   return [
-    { cls:o.cls, fx:o.fx, text:t.open[o.key] },
-    { cls:m.cls, fx:m.fx, text:t.mid[m.key] },
-    { cls:e.cls, fx:e.fx, text:t.end[e.key] },
-    { cls:e.cls + ' card', fx:e.fx, text:t.card, card:true }
+    { cls:'k-grey ' + preClass(d), fx:d.fx, text:t.before },
+    { cls:d.cls, fx:d.fx, text:t.depart[d.key] },
+    { cls:l.cls, fx:l.fx, text:t.life[l.key] },
+    { cls:m.cls, fx:m.fx, text:t.meet[m.key] },
+    { cls:e.cls, fx:e.fx, text:t.arrive[e.key] },
+    { cls:EMPTY.cls, fx:EMPTY.fx, text:t.empty },
+    { cls:EMPTY.cls + ' card', fx:EMPTY.fx, text:t.card, card:true }
   ];
 }
+const preClass = d => d.key === 'dawn' ? 'k-dawn' : d.cls.split(' ')[0] + ' pre-harbour';
 
 /* Taustan osat, jotka rakennetaan kerran */
 function palm(x, y, h, lean){
@@ -1517,10 +1657,27 @@ function buildStoryScenery(){
   for (let i = 0; i < 54; i++){ const big = rnd() > .82;
     stars += '<circle' + (i % 3 === 0 ? ' class="twinkle" style="animation-delay:' + (rnd()*2).toFixed(2) + 's"' : '') + ' cx="' + (rnd()*900 - 90).toFixed(0) + '" cy="' + (rnd()*800 - 140).toFixed(0) + '" r="' + (big ? 2 : 1.1) + '" opacity="' + (.5 + rnd()*.5).toFixed(2) + '"/>'; }
   $('sStars').innerHTML = stars;
+  /* Harmaa arki: sateinen kaupunki, josta tarina alkaa */
+  const blocks = [[-60,150,330],[78,96,470],[168,118,290],[280,84,560],[358,136,380],[488,104,490],[586,126,310],[704,120,430]];
+  let city = '<rect x="-200" y="-400" width="1120" height="2000" fill="url(#sGreySky)"/>', wins = '', glow = '';
+  blocks.forEach((b, i) => {
+    const top = 960 - b[2];
+    city += '<rect x="' + b[0] + '" y="' + top + '" width="' + b[1] + '" height="' + (b[2] + 10) + '" fill="' + (i % 2 ? '#3b444e' : '#454f5a') + '"/>';
+    for (let wy = top + 22; wy < 930; wy += 34) for (let wx = b[0] + 14; wx < b[0] + b[1] - 16; wx += 26){
+      const lit = rnd() > .86;
+      wins += '<rect x="' + wx + '" y="' + wy + '" width="12" height="18" fill="' + (lit ? '#f1cf8a' : '#566270') + '" opacity="' + (lit ? '.85' : '.6') + '"/>';
+      if (lit && wy > 700) glow += '<rect x="' + (wx+2) + '" y="962" width="8" height="' + (60 + Math.round(rnd()*120)) + '" fill="#f1cf8a" opacity=".12"/>';
+    }
+  });
+  let drops = '';
+  for (let i = 0; i < 70; i++) drops += '<path d="M' + Math.round(rnd()*900 - 60) + ',' + Math.round(rnd()*1500 - 200) + 'l-10,40"/>';
+  $('sCity').innerHTML = city + wins + '<rect x="-200" y="960" width="1120" height="640" fill="#2a323b"/>' + glow
+    + '<g class="rain" stroke="#c9d3db" stroke-width="1.5" stroke-linecap="round" opacity=".5">' + drops + '</g>';
   const seaD = wave(761, 3, 120, -320, 1160) + 'V1600H-320Z';
   $('sFront').setAttribute('d', seaD); document.querySelectorAll('.seaShape').forEach(el => el.setAttribute('d', seaD));
   $('sWave').setAttribute('d', wave(761, 3, 120, -320, 1160) + wave(800, 2.6, 120, -280, 1160) + wave(856, 3, 120, -340, 1160) + wave(930, 3.4, 120, -300, 1160) + wave(1030, 4, 120, -360, 1160));
-  $('storyBars').innerHTML = SCENE_SECONDS.map(() => '<i><b></b></i>').join('');
+  $('storyBars').innerHTML = new Array(7).fill('<i><b></b></i>').join('');
+  $('replies').innerHTML = REPLIES.map((r, i) => '<button type="button" data-reply="' + i + '">' + esc(r) + '</button>').join('');
 }
 function storyBoat(fx){
   const L = state.length * PX_FT, k = Math.min(1.15, 560 / (L + 60));
@@ -1540,86 +1697,161 @@ function pickVoice(){
   for (const name of pref){ const hit = v.find(x => x.name.indexOf(name) !== -1); if (hit) return hit; }
   return v.find(x => /en-GB/i.test(x.lang)) || v[0] || null;
 }
-function speak(text){
-  if (!soundOn || !('speechSynthesis' in window)) return;
+function speak(text, onStart, onEnd){                  // palauttaa true, jos puhe lähti jonoon
+  if (!soundOn || !('speechSynthesis' in window)) return false;
   try { const u = new SpeechSynthesisUtterance(text), voice = pickVoice();
     if (voice){ u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-GB';
-    u.rate = .97; u.pitch = 1; speechSynthesis.speak(u); } catch (e) {}
+    u.rate = .94; u.pitch = 1;
+    u.onstart = () => { if (onStart) onStart(); };
+    u.onend = u.onerror = () => { if (onEnd) onEnd(); };
+    speechSynthesis.speak(u); return true; } catch (e) { return false; }
 }
 function hush(){ if ('speechSynthesis' in window) try { speechSynthesis.cancel(); } catch (e) {} }
 
+/* Taustaäänet: aallot (suodatettu kohina) ja pehmeä sointu. Syntyvät selaimessa, ei äänitiedostoja. */
+let actx = null, amb = null;
+function startAmbience(){
+  if (!C.storyAmbience || !soundOn || amb) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  try {
+    actx = actx || new AC(); if (actx.state === 'suspended') actx.resume();
+    const t = actx.currentTime, master = actx.createGain(); master.gain.value = 0; master.connect(actx.destination);
+    const len = actx.sampleRate * 4, buf = actx.createBuffer(1, len, actx.sampleRate), data = buf.getChannelData(0);
+    let last = 0; for (let i = 0; i < len; i++){ last = (last + 0.02 * (Math.random()*2 - 1)) / 1.02; data[i] = last * 3.2; }
+    const noise = actx.createBufferSource(); noise.buffer = buf; noise.loop = true;
+    const lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+    const ng = actx.createGain(); ng.gain.value = .55;
+    const lfo = actx.createOscillator(); lfo.frequency.value = .11; const lg = actx.createGain(); lg.gain.value = .3; lfo.connect(lg); lg.connect(ng.gain);
+    noise.connect(lp); lp.connect(ng); ng.connect(master);
+    const pad = actx.createGain(); pad.gain.value = 0; const plp = actx.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 850;
+    const CH = [[146.83, 220.00, 293.66, 369.99, 440.00], [98.00, 196.00, 293.66, 392.00, 493.88]];      // D ja G
+    const oscs = CH[0].map((f, i) => { const o = actx.createOscillator(); o.type = i < 2 ? 'sine' : 'triangle'; o.frequency.value = f; o.detune.value = i % 2 ? 5 : -5;
+      const g = actx.createGain(); g.gain.value = [.5,.36,.28,.2,.12][i]; o.connect(g); g.connect(plp); o.start(); return o; });
+    plp.connect(pad); pad.connect(master); noise.start(); lfo.start();
+    master.gain.linearRampToValueAtTime(.34, t + 2.5);
+    let ci = 0; const iv = setInterval(() => { ci = 1 - ci; try { oscs.forEach((o, i) => o.frequency.setTargetAtTime(CH[ci][i], actx.currentTime, 1.2)); } catch (e) {} }, 9000);
+    amb = { master, pad, lp, iv, nodes: [noise, lfo].concat(oscs) };
+  } catch (e) { amb = null; }
+}
+function ambienceScene(i){                             // sade alussa, sitten meri ja musiikki
+  if (!amb) return;
+  try { const t = actx.currentTime;
+    amb.lp.frequency.setTargetAtTime(i === 0 ? 2400 : 520, t, .8);
+    amb.pad.gain.setTargetAtTime(i === 0 ? 0 : .085, t, 1.6); } catch (e) {}
+}
+function stopAmbience(){
+  if (!amb) return; const a = amb; amb = null; clearInterval(a.iv);
+  try { a.master.gain.cancelScheduledValues(actx.currentTime); a.master.gain.setTargetAtTime(0, actx.currentTime, .25); } catch (e) {}
+  setTimeout(() => a.nodes.forEach(n => { try { n.stop(); } catch (e) {} }), 1300);
+}
+
+const sceneEstimate = text => Math.max(4.2, text.split(/\s+/).length * 0.4 + 1.8);
 function setScene(i){
-  const sc = scenes[i], card = $('inviteCard');
-  sceneIdx = i;
+  const sc = scenes[i], card = $('inviteCard'), token = ++sceneToken, t0 = performance.now(), est = sceneEstimate(sc.text);
+  sceneIdx = i; clearTimeout(sceneTimer); clearTimeout(startTimer);
   $('storySvg').setAttribute('class', sc.cls + ' ' + story.theme);
-  storyBoat(sc.fx);
+  storyBoat(sc.fx); ambienceScene(i);
   if (sc.card){ card.src = cardDataUrl(); card.alt = cardAlt(); card.hidden = false; card.classList.remove('in'); void card.offsetWidth; card.classList.add('in'); }
   else card.hidden = true;
   const cap = $('caption'); cap.textContent = sc.text; cap.classList.remove('in'); void cap.offsetWidth; cap.classList.add('in');
   $('storyBars').querySelectorAll('b').forEach((b, j) => {
     b.style.transition = 'none'; b.style.width = j < i ? '100%' : '0';
-    if (j === i){ void b.offsetWidth; b.style.transition = 'width ' + SCENE_SECONDS[i] + 's linear'; b.style.width = '100%'; }
+    if (j === i){ void b.offsetWidth; b.style.transition = 'width ' + est.toFixed(1) + 's linear'; b.style.width = '100%'; }
   });
-  speak(sc.text);
+  $('tapHint').hidden = i !== 0;
+  /* Kohtaus vaihtuu, kun kertoja on lopettanut + 0,6 s. Jos puhetta ei ole, käytetään arvioitua kestoa. */
+  const go = () => { if (token === sceneToken && playing) nextScene(); };
+  const byClock = () => { clearTimeout(sceneTimer); sceneTimer = setTimeout(go, Math.max(0, est*1000 - (performance.now() - t0))); };
+  let started = false;
+  const queued = speak(sc.text, () => { started = true; }, () => {
+    if (token !== sceneToken) return;
+    clearTimeout(sceneTimer); sceneTimer = setTimeout(go, Math.max(PAUSE_AFTER_SPEECH*1000, MIN_SCENE*1000 - (performance.now() - t0)));
+  });
+  if (!queued) byClock();
+  else { sceneTimer = setTimeout(go, (est*1.7 + 3) * 1000); startTimer = setTimeout(() => { if (!started && token === sceneToken) byClock(); }, 1300); }
 }
 function nextScene(){
   if (sceneIdx + 1 >= scenes.length){ finishStory(); return; }
   setScene(sceneIdx + 1);
-  sceneTimer = setTimeout(nextScene, SCENE_SECONDS[sceneIdx] * 1000);
 }
+function skipScene(){ if (!playing) return; hush(); nextScene(); }
 function playStory(){
-  clearTimeout(sceneTimer); hush();
-  scenes = buildScenes();
+  clearTimeout(sceneTimer); clearTimeout(startTimer); hush(); sceneToken++;
+  scenes = buildScenes(); playing = true;
   $('storyCover').hidden = true; $('storyEnd').hidden = true; $('inviteCard').hidden = true; $('caption').hidden = false; $('shareMore').open = false;
-  const svg = $('storySvg'), first = OPENS[story.pick.o];
-  svg.setAttribute('class', 'reset ' + (first.key === 'dawn' ? '' : first.cls.split(' ')[0] + ' pre-harbour') + ' ' + story.theme); void svg.getBoundingClientRect();
+  const svg = $('storySvg');
+  svg.setAttribute('class', 'reset ' + scenes[0].cls + ' ' + story.theme); void svg.getBoundingClientRect();
+  startAmbience();
   sceneIdx = -1; nextScene();
 }
 function finishStory(){
-  clearTimeout(sceneTimer);
-  $('caption').hidden = true;
-  $('endTitle').textContent = story.shared ? 'You are invited. Say yes, then build a boat of your own.'
-    : 'Send the invitation to ' + (story.invitees.length ? listNames(story.invitees) : 'someone you would take along') + '.';
-  $('storyDone').textContent = story.shared ? 'Build your own boat' : 'Back to my boat';
-  $('anotherBtn').hidden = story.shared;
-  $('shareNative').hidden = !navigator.share;
-  $('storyFeedback').textContent = '';
+  clearTimeout(sceneTimer); clearTimeout(startTimer); sceneToken++; playing = false;
+  const crew = listNames(story.names), inv = listNames(story.invitees), v = voice();
+  $('caption').hidden = true; $('tapHint').hidden = true;
+  $('storyBars').querySelectorAll('b').forEach(b => { b.style.transition = 'none'; b.style.width = '100%'; });
+  const guest = story.shared;
+  $('endSender').hidden = guest; $('endGuest').hidden = !guest; $('imIn').hidden = false; $('replyBox').hidden = true;
+  $('leadBox').hidden = guest; $('anotherBtn').hidden = guest;
+  $('endTitle').textContent = guest ? crew + ' kept a cabin for you.' : 'Now send it to ' + (inv || 'someone you would take along') + '.';
+  $('endSub').textContent = guest ? 'One tap turns the light on.' : 'The story plays for them just as it did for you.';
+  $('leadText').textContent = 'Want to make it real? We find real boats on the market that match her.';
+  $('storyDone').textContent = guest ? 'Build your own boat' : 'Back to my boat';
+  $('storyFeedback').textContent = ''; $('guestFeedback').textContent = '';
   $('storyEnd').hidden = false;
   makeCard().catch(() => {});
-  $(navigator.share ? 'shareNative' : 'replayBtn').focus({ preventScroll: true });
+  (guest ? $('imIn') : $('shareStory')).focus({ preventScroll: true });
+}
+function imIn(){                                        // kutsuttu vastaa: pimeä ikkuna syttyy
+  const crew = listNames(story.names);
+  $('inviteCard').hidden = true;
+  $('storySvg').setAttribute('class', EMPTY.cls + ' lift ' + story.theme);
+  storyBoat(Object.assign({}, EMPTY.fx, { darkCabin:false, justLit:true }));
+  $('imIn').hidden = true; $('replyBox').hidden = false; $('leadBox').hidden = false;
+  $('endTitle').textContent = 'The light is on.';
+  $('endSub').textContent = 'Now tell ' + crew + ' yourself:';
+  $('leadText').textContent = 'Want a boat like this for real? We find real boats on the market that match her.';
+  speak('The light is on.');
+  $('replies').querySelector('button').focus({ preventScroll: true });
+}
+function sendReply(i){
+  const text = REPLIES[i] || REPLIES[0];
+  if (navigator.share) navigator.share({ text }).catch(() => {});
+  else window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+  $('guestFeedback').textContent = 'Pick the chat with ' + listNames(story.names) + ' and send.';
 }
 function openStory(cover){
   lastFocus = document.activeElement;
   $('story').hidden = false; document.body.classList.add('locked');
   story.theme = themeFor(story.place);
   if (cover){
-    const e = ENDS[story.pick.e], inv = listNames(story.invitees), crew = listNames(story.names);
+    const e = ARRIVE[story.pick.e], inv = listNames(story.invitees), crew = listNames(story.names);
+    playing = false;
     $('storySvg').setAttribute('class', e.cls + ' ' + story.theme);
     storyBoat(e.fx);
-    $('caption').hidden = true; $('storyEnd').hidden = true; $('inviteCard').hidden = true; $('storyCover').hidden = false;
-    $('coverTitle').textContent = inv ? inv + ', you are invited' : crew + (story.names.length > 1 ? ' have' : ' has') + ' a story for you';
-    $('coverText').textContent = crew + ' would like to take you to ' + story.place + '. It takes 30 seconds, and it is better with the sound on.';
+    $('caption').hidden = true; $('tapHint').hidden = true; $('storyEnd').hidden = true; $('inviteCard').hidden = true; $('storyCover').hidden = false;
+    $('coverTitle').textContent = inv ? inv + ', this is for you' : crew + (story.names.length > 1 ? ' have' : ' has') + ' something for you';
+    $('coverText').textContent = crew + ' made you a short story. It takes under a minute, and it is better with the sound on.';
     $('coverPlay').focus({ preventScroll: true });
   } else { playStory(); $('storyClose').focus({ preventScroll: true }); }
 }
 function closeStory(){
-  clearTimeout(sceneTimer); hush();
+  clearTimeout(sceneTimer); clearTimeout(startTimer); sceneToken++; playing = false; hush(); stopAmbience();
   $('story').hidden = true; document.body.classList.remove('locked');
   $('storySvg').setAttribute('class', ''); $('inviteCard').hidden = true;
   if (story.shared){ story.shared = false; if (history.replaceState) history.replaceState(null, '', location.pathname); }
   if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
 }
-function scrollToStoryBox(){
-  const top = $('storyBox').getBoundingClientRect().top + window.scrollY - (mobile.matches ? $('stage').offsetHeight : 0) - 14;
+function scrollToEl(el){
+  const top = el.getBoundingClientRect().top + window.scrollY - (mobile.matches ? $('stage').offsetHeight : 0) - 14;
   window.scrollTo({ top, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
 }
 function startStoryFromForm(){
   const names = parseNames($('crewNames').value), place = cleanPlace($('dreamPlace').value), err = $('storyError');
-  const fail = (msg, id) => { err.textContent = msg; scrollToStoryBox(); $(id).focus({ preventScroll: true }); };
+  const fail = (msg, id) => { err.textContent = msg; scrollToEl($('storyBox')); $(id).focus({ preventScroll: true }); };
   if (!names.length) return fail('Add at least one first name for the crew.', 'crewNames');
   if (!place) return fail('Add the place you dream of sailing to.', 'dreamPlace');
   err.textContent = '';
-  story.names = names; story.place = place; story.invitees = parseNames($('inviteNames').value); story.shared = false;
+  story.names = names; story.place = place; story.invitees = parseNames($('inviteNames').value); story.why = cleanWhy($('whyThem').value); story.shared = false;
   story.pick = rollPick(story.made ? story.pick : null); story.made = true; cardCache = null;
   openStory(false);
 }
@@ -1629,30 +1861,30 @@ const b64e = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').
 const b64d = str => decodeURIComponent(escape(atob(str.replace(/-/g, '+').replace(/_/g, '/'))));
 function shareUrl(){
   const p = story.pick;
-  const data = [2, state.usage, state.persons, state.length, state.cabins, state.propulsion, state.energy, state.color, state.name.trim(), story.names, story.place, story.invitees, p.o, p.m, p.e, p.w];
+  const data = [3, state.usage, state.persons, state.length, state.layout, state.propulsion, state.energy, state.color, state.name.trim(), story.names, story.place, story.invitees, p.d, p.l, p.m, p.e, story.why || ''];
   return location.href.split(/[?#]/)[0] + '?s=' + b64e(JSON.stringify(data));
 }
 function loadShared(){
   const m = /[?&]s=([^&#]+)/.exec(location.search); if (!m) return false;
   try {
-    const d = JSON.parse(b64d(m[1]));
-    if (!Array.isArray(d) || (d[0] !== 1 && d[0] !== 2)) return false;
+    const d = JSON.parse(b64d(m[1])), ver = d[0];
+    if (!Array.isArray(d) || [1, 2, 3].indexOf(ver) === -1) return false;
     const list = v => (Array.isArray(v) ? v : []).map(cleanName).filter(Boolean).slice(0, 4);
     const names = list(d[9]), place = cleanPlace(d[10] || '');
     if (!names.length || !place) return false;
     if (C.usage[d[1]]) state.usage = d[1];
     if (Number.isInteger(d[2])) state.persons = Math.max(C.persons.min, Math.min(C.persons.max, d[2]));
     if (C.lengths[d[3]]) state.length = Number(d[3]);
-    if (C.cabins[d[4]]) state.cabins = Number(d[4]);
-    if (C.cabins[state.cabins].minLength > state.length) state.cabins = maxCabinsFor(state.length);
+    if (ver === 3){ if (C.layouts[d[4]]) state.layout = d[4]; } else state.layout = Number(d[4]) >= 4 ? 'charter' : 'owner';   // vanhat linkit: hyttimäärä
     if (C.propulsion[d[5]]) state.propulsion = d[5];
     if (C.energy[d[6]]) state.energy = d[6];
     if (C.colors[d[7]]) state.color = d[7];
     state.name = String(d[8] || '').replace(/[<>]/g, '').slice(0, 18);
     const idx = (v, n) => (Number.isInteger(v) && v >= 0 && v < n) ? v : 0;
     story.names = names; story.place = place; story.shared = true; story.made = true;
-    story.invitees = d[0] === 2 ? list(d[11]) : [];
-    story.pick = d[0] === 2 ? { o: idx(d[12], OPENS.length), m: idx(d[13], MIDS.length), e: idx(d[14], ENDS.length), w: idx(d[15], 4) } : { o:0, m:0, e:0, w:0 };
+    story.invitees = ver >= 2 ? list(d[11]) : [];
+    if (ver === 3){ story.pick = { d: idx(d[12], 3), l: idx(d[13], 3), m: idx(d[14], 4), e: idx(d[15], 3) }; story.why = cleanWhy(d[16] || ''); }
+    else { story.pick = { d: ver === 2 ? idx(d[12], 3) : 0, l: 0, m: ver === 2 ? idx(d[13], 4) : 0, e: ver === 2 ? [0, 2, 1][idx(d[14], 3)] : 0 }; story.why = ''; }
     shownL = state.length * PX_FT;
     return true;
   } catch (e) { return false; }
@@ -1671,27 +1903,25 @@ function twoLines(text, max){
 }
 const sizeFor = (lines, base, budget) => Math.min(base, Math.floor(budget / Math.max.apply(null, lines.map(l => l.length).concat(1))));
 function cardAlt(){
-  const inv = listNames(story.invitees), name = state.name.trim();
-  return 'Invitation card. ' + (inv ? 'Dear ' + inv + ', you' : 'You') + ' are invited aboard ' + (name ? name + ', ' : '') + 'a ' + state.length + '-foot catamaran bound for ' + story.place + '. From ' + listNames(story.names) + '.';
+  const inv = listNames(story.invitees), v = voice();
+  return 'Invitation. ' + (inv ? inv + ', come' : 'Come') + ' with ' + v.us + '. There is one cabin still empty aboard ' + (state.name.trim() || v.our + ' catamaran') + ', bound for ' + story.place + '. From ' + listNames(story.names) + '.';
 }
 function inviteSVG(){
-  const L = state.length * PX_FT, P = C.propulsion[state.propulsion], WL = 600;
+  const L = state.length * PX_FT, P = C.propulsion[state.propulsion], WL = 600, v = voice();
   const k = Math.min(1.6, 800 / (L + 90), 500 / (P.sails ? L*.74 + 115 : 175));
-  const serif = 'font-family="Iowan Old Style,Palatino Linotype,Palatino,Georgia,serif" font-style="italic"';
   const sans = 'font-family="Avenir Next,Avenir,Segoe UI,Helvetica Neue,Roboto,Arial,sans-serif"';
   const crew = listNames(story.names), inv = listNames(story.invitees), name = state.name.trim();
   const items = [];                                   // [teksti, koko, tyyli, rivin korkeus]
-  if (inv){ const dear = twoLines('Dear ' + inv + ',', 36), ds = sizeFor(dear, 44, 1800); dear.forEach(l => items.push([l, ds, serif + ' fill="#566777"', 56])); }
-  items.push(['You are invited', 108, serif + ' fill="#0b2a47"', inv ? 122 : 108]);
-  const aboard = name ? 'aboard ' + name + ', a ' + state.length + '-foot catamaran' : 'aboard a ' + state.length + '-foot dream catamaran';
-  items.push([aboard, sizeFor([aboard], 42, 1780), sans + ' fill="#0c2238"', 70]);
-  const bound = 'bound for ' + story.place + '.';
-  items.push([bound, sizeFor([bound], 48, 1700), sans + ' font-weight="600" fill="#8a6a36"', 62]);
-  items.push(['Departure: the day you say yes.', 34, sans + ' fill="#566777"', 74]);
-  const from = twoLines('From ' + crew + '. Your place on board is saved.', 58), fsz = sizeFor(from, 31, 1780);
-  from.forEach((l, i) => items.push([l, fsz, sans + ' fill="#0c2238"', i ? 42 : 58]));
+  if (inv){ const to = twoLines(inv + ',', 40), ts = sizeFor(to, 46, 1800); to.forEach(l => items.push([l, ts, sans + ' fill="#566777"', 58])); }
+  items.push(['Come with ' + v.us + '.', 128, sans + ' font-weight="300" letter-spacing="-3" fill="#0b2a47"', inv ? 132 : 120]);
+  if (story.why){ const why = twoLines('“' + story.why + '”', 46), ws = sizeFor(why, 38, 1780); why.forEach((l, i) => items.push([l, ws, sans + ' font-style="italic" fill="#8a6a36"', i ? 46 : 66])); }
+  items.push(['There is one cabin still empty', 38, sans + ' fill="#0c2238"', story.why ? 70 : 82]);
+  const aboard = 'aboard ' + (name || v.our + ' catamaran') + ', bound for ' + story.place + '.';
+  items.push([aboard, sizeFor([aboard], 38, 1780), sans + ' fill="#0c2238"', 50]);
+  items.push([v.We + ' kept it for you.', 40, sans + ' font-weight="600" fill="#0b2a47"', 66]);
+  const sig = twoLines(crew, 50); sig.forEach((l, i) => items.push([l, sizeFor(sig, 34, 1700), sans + ' fill="#566777"', i ? 42 : 62]));
   const total = items.reduce((t, it) => t + it[3], 0);
-  let y = 716 + (548 - total) / 2, text = '';
+  let y = 706 + Math.max(0, (572 - total) / 2), text = '';
   items.forEach(it => { y += it[3]; text += '<text x="540" y="' + y.toFixed(0) + '" text-anchor="middle" font-size="' + it[1] + '" ' + it[2] + '>' + esc(it[0]) + '</text>'; });
   return '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">'
     + '<defs><clipPath id="cClip"><rect x="28" y="28" width="1024" height="1294" rx="14"/></clipPath>'
@@ -1702,11 +1932,11 @@ function inviteSVG(){
     + '<rect width="1080" height="1350" fill="#0b2a47"/><g clip-path="url(#cClip)">'
     + '<rect x="28" y="28" width="1024" height="' + (WL - 28) + '" fill="url(#cSky)"/><circle cx="236" cy="' + (WL - 64) + '" r="230" fill="url(#cGlow)"/><circle cx="236" cy="' + (WL - 64) + '" r="60" fill="#ffecb5"/>'
     + '<rect x="28" y="' + WL + '" width="1024" height="' + (702 - WL) + '" fill="url(#cSea)"/>'
-    + '<g transform="translate(' + (540 - 500*k).toFixed(1) + ',' + (WL - 540*k).toFixed(1) + ') scale(' + k.toFixed(3) + ')">' + boatSVG(L, state, { id:'c' }) + '</g>'
+    + '<g transform="translate(' + (540 - 500*k).toFixed(1) + ',' + (WL - 540*k).toFixed(1) + ') scale(' + k.toFixed(3) + ')">' + boatSVG(L, state, { id:'c', chair:true }) + '</g>'
     + '<rect x="28" y="' + (WL + 2) + '" width="1024" height="' + (700 - WL) + '" fill="url(#cFront)"/>'
     + '<path d="' + wave(WL + 34, 3, 150, -20, 1200) + wave(WL + 70, 3.5, 150, -80, 1200) + '" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width="2"/>'
     + '<rect x="28" y="700" width="1024" height="622" fill="#f7f9fa"/><rect x="28" y="697" width="1024" height="5" fill="#dcc08c"/>' + text
-    + '<text x="540" y="1296" text-anchor="middle" font-size="25" ' + sans + ' fill="#8a6a36">Build your own dream catamaran at globalcatamarans.com</text>'
+    + '<text x="540" y="1300" text-anchor="middle" font-size="24" ' + sans + ' fill="#8a6a36">Build your own dream catamaran at globalcatamarans.com</text>'
     + '</g></svg>';
 }
 const cardDataUrl = () => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(inviteSVG());
@@ -1721,78 +1951,106 @@ function makeCard(){
   });
 }
 
+/* Jakaminen: joko koko tarina (linkki) tai pelkkä kutsu (kuva) */
 function storySay(msg){ $('storyFeedback').textContent = msg; }
-function shareImage(alsoCopy){
+function shareText(){
+  const crew = listNames(story.names), inv = listNames(story.invitees);
+  return (inv ? 'For ' + inv + '. ' : '') + crew + (story.names.length > 1 ? ' have' : ' has') + ' kept a cabin for you. Watch:';
+}
+function shareImage(mode){                              // mode: 'share' = jaa kuva, 'save' = tallenna, 'insta' = tallenna + kopioi linkki
   const fname = 'dream-catamaran-invitation.png';
   makeCard().then(blob => {
     const file = (typeof File === 'function') ? new File([blob], fname, { type: 'image/png' }) : null;
-    (alsoCopy ? copyText(shareUrl()) : Promise.resolve(false)).then(copied => {
-      const extra = copied ? ' Link copied: open Instagram, add the invitation to your Story and paste the link into the Link sticker.' : '';
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })){
-        navigator.share({ files: [file] }).then(() => storySay('Invitation shared.' + extra), () => { saveBlob(blob, fname); storySay('Invitation saved.' + extra); });
-      } else { saveBlob(blob, fname); storySay('Invitation saved.' + extra); }
+    (mode === 'insta' ? copyText(shareUrl()) : Promise.resolve(false)).then(copied => {
+      const extra = copied ? ' Link copied: add the invitation to your Story and paste the link into the Link sticker.' : '';
+      if (mode !== 'save' && file && navigator.canShare && navigator.canShare({ files: [file] })){
+        navigator.share({ files: [file] }).then(() => storySay('Invitation shared.' + extra), () => { saveBlob(blob, fname); storySay('Invitation saved as a picture.' + extra); });
+      } else { saveBlob(blob, fname); storySay('Invitation saved as a picture. Attach it to any chat.' + extra); }
     });
-  }, () => storySay('The invitation image could not be created in this browser. Use Copy link instead.'));
+  }, () => storySay('The invitation picture could not be created in this browser. Share the story instead.'));
 }
 function share(kind){
-  const url = shareUrl(), crew = listNames(story.names), inv = listNames(story.invitees), enc = encodeURIComponent;
-  const text = crew + (story.names.length > 1 ? ' are' : ' is') + ' inviting ' + (inv || 'you') + ' on a voyage to ' + story.place + '. Watch the story:';
+  const url = shareUrl(), text = shareText(), enc = encodeURIComponent;
   const open = u => window.open(u, '_blank', 'noopener');
-  if (kind === 'native') navigator.share({ title: 'An invitation to a dream catamaran', text, url }).catch(() => {});
+  if (kind === 'story'){
+    if (navigator.share) navigator.share({ title: 'A cabin with your name on it', text, url }).catch(() => {});
+    else copyText(url).then(ok => { $('shareMore').open = true; storySay(ok ? 'Link copied. Paste it into any chat, or pick an app below.' : 'Pick an app below.'); });
+  }
+  else if (kind === 'invitation') shareImage('share');
+  else if (kind === 'image') shareImage('save');
+  else if (kind === 'instagram') shareImage('insta');
   else if (kind === 'whatsapp') open('https://wa.me/?text=' + enc(text + ' ' + url));
   else if (kind === 'facebook') open('https://www.facebook.com/sharer/sharer.php?u=' + enc(url));
   else if (kind === 'x') open('https://twitter.com/intent/tweet?text=' + enc(text) + '&url=' + enc(url));
   else if (kind === 'linkedin') open('https://www.linkedin.com/sharing/share-offsite/?url=' + enc(url));
   else if (kind === 'telegram') open('https://t.me/share/url?url=' + enc(url) + '&text=' + enc(text));
-  else if (kind === 'email') location.href = 'mailto:?subject=' + enc('You are invited aboard a dream catamaran') + '&body=' + enc(text + '\n\n' + url);
+  else if (kind === 'email') location.href = 'mailto:?subject=' + enc('A cabin with your name on it') + '&body=' + enc(text + '\n\n' + url);
   else if (kind === 'copy') copyText(url).then(ok => storySay(ok ? 'Link copied. Paste it anywhere.' : 'Copying did not work in this browser.'));
-  else if (kind === 'instagram') shareImage(true);
-  else if (kind === 'image') shareImage(false);
 }
+
+/* Liidi: "tee tästä totta" -painike vie viestin Global Catamaransille (asetus PRICING_CONFIG.lead) */
+function leadHref(){
+  const L = C.lead || {}, msg = 'Hello Global Catamarans, this is the catamaran I built:\n\n' + summaryText(), enc = encodeURIComponent;
+  if (L.whatsapp) return 'https://wa.me/' + String(L.whatsapp).replace(/\D/g, '') + '?text=' + enc(msg);
+  if (L.email) return 'mailto:' + L.email + '?subject=' + enc('My dream catamaran') + '&body=' + enc(msg);
+  return C.cta.url;
+}
+const leadLabel = () => (C.lead && (C.lead.whatsapp || C.lead.email)) ? 'Send my build to Global Catamarans' : C.cta.text;
 
 /* ---------- Tapahtumat ---------- */
 buildForm(); buildStoryScenery();
 const cameShared = loadShared();
 $('form').addEventListener('change', e => {
   const t = e.target; if (t.type !== 'radio') return;
-  set(t.name, (t.name === 'length' || t.name === 'cabins') ? Number(t.value) : t.value);
+  set(t.name, t.name === 'length' ? Number(t.value) : t.value);
 });
 $('budget').addEventListener('input', e => set('budget', Number(e.target.value)));
 $('boatName').addEventListener('input', e => set('name', e.target.value.slice(0, 18)));
 $('boatName').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); goTo(step + 1); } });
 $('crewMinus').addEventListener('click', () => set('persons', Math.max(C.persons.min, state.persons - 1)));
 $('crewPlus').addEventListener('click', () => set('persons', Math.min(C.persons.max, state.persons + 1)));
-$('applyAdvice').addEventListener('click', () => { const r = recommend(state); set('cabins', r.cabins); set('energy', r.energy); set('length', r.length); });
+$('applyAdvice').addEventListener('click', () => { const r = recommend(state); set('layout', r.layout); set('energy', r.energy); set('length', r.length); });
 $('prevBtn').addEventListener('click', () => goTo(step - 1));
 $('nextBtn').addEventListener('click', () => goTo(step + 1));
 document.addEventListener('click', e => { const b = e.target.closest('[data-goto]'); if (b) goTo(Number(b.dataset.goto)); });
 $('copyBtn').addEventListener('click', copySummary);
 $('downloadBtn').addEventListener('click', downloadSummary);
-$('restart').addEventListener('click', () => { Object.assign(state, INITIAL); ['crewNames','dreamPlace','inviteNames'].forEach(id => { $(id).value = ''; }); $('storyError').textContent = ''; renderUI(); tweenLength(); goTo(0); });
+$('restart').addEventListener('click', () => { Object.assign(state, INITIAL); ['crewNames','dreamPlace','inviteNames','whyThem'].forEach(id => { $(id).value = ''; }); $('storyError').textContent = ''; renderUI(); tweenLength(); goTo(0); });
 
 $('storyBtn').addEventListener('click', startStoryFromForm);
 $('storyBtn2').addEventListener('click', startStoryFromForm);
-['crewNames','dreamPlace','inviteNames'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); startStoryFromForm(); } }));
+['crewNames','dreamPlace','inviteNames','whyThem'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); startStoryFromForm(); } }));
 $('coverPlay').addEventListener('click', playStory);
 $('replayBtn').addEventListener('click', playStory);
 $('anotherBtn').addEventListener('click', () => { story.pick = rollPick(story.pick); cardCache = null; playStory(); });
 $('storyClose').addEventListener('click', closeStory);
 $('storyDone').addEventListener('click', closeStory);
-$('storyEnd').addEventListener('click', e => { const b = e.target.closest('[data-share]'); if (b) share(b.dataset.share); });
+$('storyEnd').addEventListener('click', e => {
+  const b = e.target.closest('[data-share]'); if (b) share(b.dataset.share);
+  const r = e.target.closest('[data-reply]'); if (r) sendReply(Number(r.dataset.reply));
+});
+$('imIn').addEventListener('click', imIn);
+$('storySvg').addEventListener('click', skipScene);
+$('caption').addEventListener('click', skipScene);
+$('seeChoices').addEventListener('click', () => scrollToEl($('choicesTitle')));
 $('soundBtn').addEventListener('click', () => {
   soundOn = !soundOn; const b = $('soundBtn');
   b.innerHTML = soundOn ? SOUND_ON : SOUND_OFF; b.setAttribute('aria-pressed', String(soundOn));
-  b.setAttribute('aria-label', soundOn ? 'Turn narration off' : 'Turn narration on');
-  if (!soundOn) hush();
+  b.setAttribute('aria-label', soundOn ? 'Turn sound off' : 'Turn sound on');
+  if (!soundOn){ hush(); stopAmbience(); } else if (!$('story').hidden){ startAmbience(); ambienceScene(Math.max(1, sceneIdx)); }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('story').hidden) closeStory(); });
+document.addEventListener('keydown', e => {
+  if ($('story').hidden) return;
+  if (e.key === 'Escape') closeStory();
+  else if (e.key === 'ArrowRight' && playing){ e.preventDefault(); skipScene(); }
+});
 if ('speechSynthesis' in window){ try { speechSynthesis.getVoices(); } catch (e) {} }
-window.addEventListener('pagehide', hush);
+window.addEventListener('pagehide', () => { hush(); stopAmbience(); });
 
 renderUI(); renderBoat(); renderStep(false); fitScene();
 if ('ResizeObserver' in window){ const ro = new ResizeObserver(() => { fitScene(); renderStep(false); }); ro.observe($('stage')); ro.observe($('hud')); }
 else window.addEventListener('resize', fitScene);
-if (cameShared){ $('crewNames').value = story.names.join(', '); $('dreamPlace').value = story.place; $('inviteNames').value = story.invitees.join(', '); step = LAST; renderStep(false); openStory(true); }
+if (cameShared){ $('crewNames').value = story.names.join(', '); $('dreamPlace').value = story.place; $('inviteNames').value = story.invitees.join(', '); $('whyThem').value = story.why || ''; step = LAST; renderStep(false); openStory(true); }
 })();
 </script>
 </body>
